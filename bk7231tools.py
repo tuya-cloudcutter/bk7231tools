@@ -60,9 +60,12 @@ class BK7231Serial(object):
         return False
 
     def __read_flash_4k_operation(self, start_addr):
-        payload = self.__build_payload_preamble(self.COMMAND_TYPE_READFLASH4K, 4)
-        payload += struct.pack('<I', start_addr)
-        response_type, response_payload = self.__send_and_parse_response(payload=payload)
+        payload = struct.pack('<I', start_addr)
+
+        wire_payload = self.__build_payload_preamble(self.COMMAND_TYPE_READFLASH4K, len(payload))
+        wire_payload += payload
+        
+        response_type, response_payload = self.__send_and_parse_response(payload=wire_payload)
         if response_type != self.COMMAND_TYPE_READFLASH4K:
             raise ValueError(f"Failed to read 4K of flash at address {start_addr:#x}")
         # TODO: the response payload is 0x1004 in size, first 4 bytes
@@ -104,6 +107,8 @@ class BK7231Serial(object):
         if payload_length >= 0xFF:
             payload += self.LONG_COMMAND_MARKER
             payload += struct.pack("<H", payload_length)
+        else:
+            payload += struct.pack("B", payload_length)
         payload += struct.pack("B", payload_type)
 
 
