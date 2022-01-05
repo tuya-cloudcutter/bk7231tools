@@ -17,6 +17,7 @@ class BK7231Serial(object):
     LONG_RESPONSE_MARKER = b"\xf4"
 
     COMMAND_TYPE_CHIPINFO = 0x11
+    COMMAND_TYPE_READFLASH4K = 0x09
 
     def __init__(self, device, baudrate, timeout=10.0):
         self.device = device
@@ -29,6 +30,16 @@ class BK7231Serial(object):
         if self.serial and not self.serial.closed:
             self.serial.close()
 
+    def read_flash_4k(self, start_addr, segment_count=1):
+        if (start_addr & 0xfff) != 0:
+            raise ValueError(f"Starting address {start_addr:#x} is not 4K aligned")
+        if (start_addr < 0x10000):
+            raise ValueError(f"Starting address {start_addr:#x} is smaller than 0x10000")
+
+        end_addr = start_addr + segment_count * 0x1000
+        while start_addr < end_addr:
+            start_addr += 0x1000
+
     def __wait_for_link(self):
         timeout = Timeout(self.timeout)
         while not timeout.expired():
@@ -36,7 +47,7 @@ class BK7231Serial(object):
                 self.serial = serial.Serial(
                     port=self.device, baudrate=self.baudrate, timeout=self.timeout
                 )
-                payload = self.__build_payload_preamble(self.COMMAND_TYPE_CHIPINFO, 1)
+                payload = self.__build_payload_preamble(self.COMMAND_TYPE_CHIPINFO)
                 response_type, response_payload = self.__send_and_parse_response(
                     payload=payload
                 )
@@ -47,6 +58,16 @@ class BK7231Serial(object):
             except:
                 pass
         return False
+
+    def __read_flash_4k_operation(self, start_addr):
+        payload = self.__build_payload_preamble(self.COMMAND_TYPE_READFLASH4K, 4)
+        payload += struct.pack('<I', start_addr)
+        response_type, response_payload = self.__send_and_parse_response(payload=payload)
+        if response_type != self.COMMAND_TYPE_READFLASH4K:
+            raise ValueError(f"Failed to read 4K of flash at address {start_addr:#x}")
+        # TODO: the response payload is 0x1004 in size, first 4 bytes
+        # might be addr - should probably parse that
+        return response_payload
 
     def __send_and_parse_response(self, payload):
         self.serial.write(payload)
@@ -65,8 +86,10 @@ class BK7231Serial(object):
         if long_command:
             self.__read_until_dropping(self.LONG_RESPONSE_MARKER)
             response_length, response_type = struct.unpack("<HH", self.serial.read(2))
+            response_length -= 2
         else:
             response_type = self.serial.read(1)
+            response_length -= 4
 
         response_payload = self.serial.read(response_length)
         return response_type, response_payload
@@ -75,8 +98,9 @@ class BK7231Serial(object):
         self.serial.read_until(marker)
         self.serial.read(len(marker))
 
-    def __build_payload_preamble(self, payload_type, payload_length):
+    def __build_payload_preamble(self, payload_type, payload_length=0):
         payload = self.COMMON_COMMAND_PREAMBLE
+        payload_length += 1
         if payload_length >= 0xFF:
             payload += self.LONG_COMMAND_MARKER
             payload += struct.pack("<H", payload_length)
@@ -91,8 +115,7 @@ def connect_device(device, baudrate, timeout):
     finally:
         device.close()
 
-
-def main():
+def parse_args():
     parser = argparse.ArgumentParser(
         prog="bk7231tools",
         description="Utility to interact with BK7231 chips over serial",
@@ -110,7 +133,18 @@ def main():
         default=10.0,
         help="Timeout for operations in seconds (default: 10.0)",
     )
-    args = parser.parse_args()
+
+    subparsers = parser.add_subparsers(help='subcommand to execute')
+
+    parser_read_flash = subparsers.add_parser('read_flash', help='Read data from flash')
+    parser_read_flash.add_argument("file", required=True, help="File to store flash data")
+    parser_read_flash.add_argument("-s", "--start-address", default=0x11000, help="Starting address to read from (default: 0x11000)")
+    parser_read_flash.add_argument("-c", "--count", default=16, help="Number of 4K segments to read from flash (default: 16 segments = 64K)")
+
+    return parser.parse_args()
+
+def main():
+    args = parse_args()
 
     try:
         with connect_device(args.device, args.baudrate, args.timeout) as device:
