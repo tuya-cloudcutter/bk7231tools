@@ -81,7 +81,8 @@ class BK7231Serial(object):
             payload += self.LONG_COMMAND_MARKER
             payload += struct.pack("<H", payload_length)
         payload += struct.pack("B", payload_type)
-        
+
+
 @contextlib.contextmanager
 def connect_device(device, baudrate, timeout):
     device = BK7231Serial(device, baudrate, timeout)
