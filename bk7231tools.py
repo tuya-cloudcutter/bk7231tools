@@ -1,6 +1,9 @@
 import argparse
+import sys
 import serial
 import struct
+import contextlib
+import traceback
 
 from serial.serialutil import Timeout
 
@@ -19,7 +22,12 @@ class BK7231Serial(object):
         self.device = device
         self.baudrate = baudrate
         self.timeout = timeout
-        self.__wait_for_link()
+        if not self.__wait_for_link():
+            raise TimeoutError("Timed out attempting to link with chip")
+
+    def close(self):
+        if self.serial and not self.serial.closed:
+            self.serial.close()
 
     def __wait_for_link(self):
         timeout = Timeout(self.timeout)
@@ -73,6 +81,14 @@ class BK7231Serial(object):
             payload += self.LONG_COMMAND_MARKER
             payload += struct.pack("<H", payload_length)
         payload += struct.pack("B", payload_type)
+        
+@contextlib.contextmanager
+def connect_device(device, baudrate, timeout):
+    device = BK7231Serial(device, baudrate, timeout)
+    try:
+        yield device
+    finally:
+        device.close()
 
 
 def main():
@@ -95,8 +111,11 @@ def main():
     )
     args = parser.parse_args()
 
-    device = BK7231Serial(args.device, args.baudrate, args.timeout)
-    print(device.chipinfo)
+    try:
+        with connect_device(args.device, args.baudrate, args.timeout) as device:
+            print(device.chipinfo)
+    except TimeoutError:
+        print(traceback.format_exc(), file=sys.stderr)
 
 
 if __name__ == "__main__":
