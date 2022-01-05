@@ -76,7 +76,7 @@ class BK7231Serial(object):
         self.serial.read(len(marker))
 
     def __build_payload_preamble(self, payload_type, payload_length):
-        payload = self.COMMON_COMMAND_PREAMBLE[::]
+        payload = self.COMMON_COMMAND_PREAMBLE
         if payload_length >= 0xFF:
             payload += self.LONG_COMMAND_MARKER
             payload += struct.pack("<H", payload_length)
