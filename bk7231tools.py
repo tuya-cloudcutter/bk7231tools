@@ -18,7 +18,9 @@ class CommandType:
     has_response_code: bool = False
 
 
-COMMAND_LINKCHECK = CommandType(code=0x00, response_code=0x01, has_response_code=True, is_long=False)
+COMMAND_LINKCHECK = CommandType(
+    code=0x00, response_code=0x01, has_response_code=True, is_long=False
+)
 COMMAND_READCHIPINFO = CommandType(code=0x11, is_long=False)
 COMMAND_READFLASH4K = CommandType(code=0x09, is_long=True)
 COMMAND_REBOOT = CommandType(code=0x0E, is_long=False)
@@ -42,6 +44,8 @@ class BK7231Serial(object):
         )
         if not self.__wait_for_link():
             raise TimeoutError("Timed out attempting to link with chip")
+        self.chip_info = self.read_chip_info()
+        print(f"Connected! Chip info: {self.chip_info}")
 
     def close(self):
         if self.serial and not self.serial.closed:
@@ -110,11 +114,18 @@ class BK7231Serial(object):
         self.serial.timeout = link_wait_timeout
         while not timeout.expired():
             try:
-                self.chip_info = self.read_chip_info()
-                print(f"Connected! Chip info: {self.chip_info}")
-                self.__drain()
-                self.serial.timeout = self.timeout
-                return True
+                command_type = COMMAND_LINKCHECK
+                payload = self.__build_payload_preamble(command_type.code)
+                response_code, response_payload = self.__send_and_parse_response(
+                    payload=payload, request_type=command_type
+                )
+                if (
+                    response_code == command_type.response_code
+                    and response_payload == b"\x00"
+                ):
+                    self.__drain()
+                    self.serial.timeout = self.timeout
+                    return True
             except ValueError:
                 pass
         return False
@@ -188,7 +199,8 @@ class BK7231Serial(object):
 
                 # Special case if the request type has a special response code - if so
                 # break out
-                if request_type.has_response_code and read_response_type == request_type.response_code:
+                if (request_type.has_response_code and
+                    read_response_type == request_type.response_code):
                     break
 
             except struct.error:
