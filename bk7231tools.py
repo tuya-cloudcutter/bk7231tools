@@ -1,12 +1,25 @@
 import argparse
 import sys
+from dataclasses import dataclass
+from enum import Enum
 from typing import List
 import serial
 import struct
-import contextlib
 import traceback
 
-from serial.serialutil import SerialException, Timeout
+from serial.serialutil import Timeout
+
+
+@dataclass
+class CommandType:
+    code: int = 0x00
+    is_long: bool = True
+
+
+COMMAND_LINKCHECK = CommandType(code=0x00, is_long=False)
+COMMAND_READCHIPINFO = CommandType(code=0x11, is_long=False)
+COMMAND_READFLASH4K = CommandType(code=0x09, is_long=True)
+COMMAND_REBOOT = CommandType(code=0x0E, is_long=False)
 
 
 class BK7231Serial(object):
@@ -14,22 +27,41 @@ class BK7231Serial(object):
     LONG_COMMAND_MARKER = b"\xff\xf4"
 
     RESPONSE_PREAMBLE = b"\x04\x0e"
-    RESPONSE_START_MARKER = COMMON_COMMAND_PREAMBLE
+    RESPONSE_DATA_MARKER = COMMON_COMMAND_PREAMBLE
     LONG_RESPONSE_MARKER = b"\xf4"
-
-    COMMAND_TYPE_CHIPINFO = 0x11
-    COMMAND_TYPE_READFLASH4K = 0x09
 
     def __init__(self, device, baudrate, timeout=10.0):
         self.device = device
         self.baudrate = baudrate
         self.timeout = timeout
+        self.serial = serial.Serial(
+            port=self.device, baudrate=self.baudrate, timeout=timeout
+        )
         if not self.__wait_for_link():
             raise TimeoutError("Timed out attempting to link with chip")
 
     def close(self):
         if self.serial and not self.serial.closed:
             self.serial.close()
+
+    def reboot_chip(self):
+        command_type = COMMAND_REBOOT.code
+        payload = self.__build_payload_preamble(command_type, payload_length=1)
+        payload += b"\xA5"
+        self.serial.write(payload)
+        self.serial.flush()
+
+    def read_chip_info(self):
+        command_type = COMMAND_READCHIPINFO.code
+        payload = self.__build_payload_preamble(command_type)
+        response_type, response_payload = self.__send_and_parse_response(
+            payload=payload,
+            request_type=COMMAND_READCHIPINFO
+        )
+        if response_type == command_type:
+            return response_payload.decode("utf8")
+        else:
+            raise ValueError("Invalid chip_info response")
 
     def read_flash_4k(self, start_addr, segment_count=1):
         if (start_addr & 0xFFF) != 0:
@@ -41,28 +73,32 @@ class BK7231Serial(object):
 
         flash_data = bytearray()
         end_addr = start_addr + segment_count * 0x1000
+        cur_addr = start_addr
 
-        while start_addr < end_addr:
-            flash_data += self.__read_flash_4k_operation(start_addr)
-            start_addr += 0x1000
+        while cur_addr < end_addr:
+            try:
+                print(f"Reading 4k page at {cur_addr:#X}, first rebooting the device ({(((cur_addr-start_addr) / (end_addr-start_addr))*100):.2f}%)")
+                for _ in range(10):
+                    self.reboot_chip()
+                if not self.__wait_for_link():
+                    continue
+                flash_data += self.__read_flash_4k_operation(cur_addr)
+                cur_addr += 0x1000
+            except:
+                pass
 
         return flash_data
 
-    def __wait_for_link(self):
-        timeout = Timeout(self.timeout)
+    def __wait_for_link(self, link_wait_timeout=0.01):
+        timeout = Timeout(10)
+        self.serial.timeout = link_wait_timeout
         while not timeout.expired():
             try:
-                self.serial = serial.Serial(
-                    port=self.device, baudrate=self.baudrate, timeout=self.timeout
-                )
-                payload = self.__build_payload_preamble(self.COMMAND_TYPE_CHIPINFO)
-                response_type, response_payload = self.__send_and_parse_response(
-                    payload=payload
-                )
-                if response_type == self.COMMAND_TYPE_CHIPINFO:
-                    self.chipinfo = response_payload
-                    print(f"Connected! Chip info: {self.chipinfo}")
-                    return True
+                self.chip_info = self.read_chip_info()
+                print(f"Connected! Chip info: {self.chip_info}")
+                self.__drain()
+                self.serial.timeout = self.timeout
+                return True
             except ValueError:
                 pass
         return False
@@ -71,70 +107,86 @@ class BK7231Serial(object):
         payload = struct.pack("<I", start_addr)
 
         wire_payload = self.__build_payload_preamble(
-            self.COMMAND_TYPE_READFLASH4K, len(payload)
+            COMMAND_READFLASH4K.code, len(payload), long_command=True
         )
         wire_payload += payload
 
-        response_type, response_payload = self.__send_and_parse_response(
-            payload=wire_payload
-        )
-        if response_type != self.COMMAND_TYPE_READFLASH4K:
-            raise ValueError(f"Failed to read 4K of flash at address {start_addr:#x}")
-        # TODO: the response payload is 0x1004 in size, first 4 bytes
-        # might be addr - must parse and investigate
-        return response_payload
-
-    def __send_and_parse_response(self, payload):
-        self.serial.write(payload)
-        received_preamble = self.serial.read(2)
-
-        if received_preamble != self.RESPONSE_PREAMBLE:
-            raise ValueError(
-                f"Failed to read response header, received preamble: {received_preamble.hex()}"
+        while True:
+            response_type, response_payload = self.__send_and_parse_response(
+                payload=wire_payload,
+                request_type=COMMAND_READFLASH4K
             )
+            if len(response_payload) != (4*1024) + 4:
+                print(f"Expected length {(4*1024) + 4}, but got {len(response_payload)}")
+                raise SystemError("Chip got borked")
+            address = struct.unpack("<I", response_payload[:4])[0]
+            if address == start_addr:
+                break
+            else:
+                print("Retrying read")
 
-        response_length = self.serial.read(1)
-        response_type = 0
-        long_command = response_length == 0xFF
+        return response_payload[4:]
 
-        self.__read_until_dropping(self.RESPONSE_START_MARKER)
-        if long_command:
-            self.__read_until_dropping(self.LONG_RESPONSE_MARKER)
-            response_length, response_type = struct.unpack("<HH", self.serial.read(2))
-            response_length -= 2
-        else:
-            response_type = self.serial.read(1)
-            response_length -= 4
+    def __send_and_parse_response(self, payload, request_type: CommandType):
+        response_length = 0
+        read_response_type = None
+
+        while read_response_type != request_type.code:
+            try:
+                self.serial.write(payload)
+                self.serial.flush()
+                data = self.serial.read_until(self.RESPONSE_PREAMBLE)
+                if len(data) == 0 or data[-len(self.RESPONSE_PREAMBLE):] != self.RESPONSE_PREAMBLE:
+                    raise ValueError("No response received")
+
+                response_length = struct.unpack("B", self.serial.read(1))[0]
+                is_long_command = response_length == 0xFF
+                if request_type.is_long != is_long_command:
+                    # Invalid response, so continue reading until a new valid packet is found
+                    continue
+
+                response_data_marker = self.serial.read(len(self.RESPONSE_DATA_MARKER))
+                if response_data_marker != self.RESPONSE_DATA_MARKER:
+                    # Invalid packet, so continue reading until a new valid packet is found
+                    continue
+
+                if is_long_command:
+                    data = self.serial.read_until(self.LONG_RESPONSE_MARKER)
+                    response_length, read_response_type = struct.unpack("<HH", self.serial.read(4))
+                    response_length -= 2
+                else:
+                    read_response_type = struct.unpack("B", self.serial.read(1))[0]
+                    response_length -= 4
+            except struct.error:
+                pass
 
         response_payload = self.serial.read(response_length)
-        return response_type, response_payload
+        return read_response_type, response_payload
 
-    def __read_until_dropping(self, marker):
-        self.serial.read_until(marker)
-        self.serial.read(len(marker))
+    def __drain(self):
+        self.serial.timeout = 0.001
+        while self.serial.read(1 * 1024) != b"":
+            pass
+        self.serial.timeout = self.timeout
 
-    def __build_payload_preamble(self, payload_type, payload_length=0):
+    def __build_payload_preamble(self, payload_type, payload_length=0, long_command=False):
         payload = self.COMMON_COMMAND_PREAMBLE
         payload_length += 1
-        if payload_length >= 0xFF:
+        if payload_length >= 0xFF or long_command:
             payload += self.LONG_COMMAND_MARKER
             payload += struct.pack("<H", payload_length)
         else:
             payload += struct.pack("B", payload_length)
         payload += struct.pack("B", payload_type)
+        return payload
 
 
-@contextlib.contextmanager
 def connect_device(device, baudrate, timeout):
-    device = BK7231Serial(device, baudrate, timeout)
-    try:
-        yield device
-    finally:
-        device.close()
+    return BK7231Serial(device, baudrate, timeout)
 
 
-def chipinfo(device: BK7231Serial, args: List[str]):
-    print(device.chipinfo)
+def chip_info(device: BK7231Serial, args: List[str]):
+    print(device.chip_info)
 
 
 def read_flash(device: BK7231Serial, args: List[str]):
@@ -163,8 +215,8 @@ def parse_args():
 
     subparsers = parser.add_subparsers(help="subcommand to execute")
 
-    parser_chip_info = subparsers.add_parser("chipinfo", help="Shows chip information")
-    parser_chip_info.set_defaults(handler=chipinfo)
+    parser_chip_info = subparsers.add_parser("chip_info", help="Shows chip information")
+    parser_chip_info.set_defaults(handler=chip_info)
 
     parser_read_flash = subparsers.add_parser("read_flash", help="Read data from flash")
     parser_read_flash.add_argument(
@@ -190,15 +242,11 @@ def parse_args():
     return parser.parse_args()
 
 
-def main():
+if __name__ == "__main__":
     args = parse_args()
 
     try:
-        with connect_device(args.device, args.baudrate, args.timeout) as device:
-            args.handler(device, args)
+        device = connect_device(args.device, args.baudrate, args.timeout)
+        args.handler(device, args)
     except TimeoutError:
         print(traceback.format_exc(), file=sys.stderr)
-
-
-if __name__ == "__main__":
-    main()
