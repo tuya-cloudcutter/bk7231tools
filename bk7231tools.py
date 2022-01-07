@@ -13,13 +13,16 @@ from serial.serialutil import Timeout
 @dataclass
 class CommandType:
     code: int = 0x00
+    response_code: int = 0x00
     is_long: bool = True
+    has_response_code: bool = False
 
 
-COMMAND_LINKCHECK = CommandType(code=0x00, is_long=False)
+COMMAND_LINKCHECK = CommandType(code=0x00, response_code=0x01, has_response_code=True, is_long=False)
 COMMAND_READCHIPINFO = CommandType(code=0x11, is_long=False)
 COMMAND_READFLASH4K = CommandType(code=0x09, is_long=True)
 COMMAND_REBOOT = CommandType(code=0x0E, is_long=False)
+COMMAND_FLASHCRC = CommandType(code=0x10, is_long=False)
 
 
 class BK7231Serial(object):
@@ -44,19 +47,30 @@ class BK7231Serial(object):
         if self.serial and not self.serial.closed:
             self.serial.close()
 
+    def read_flash_range_crc(self, start_address, end_address):
+        command_type = COMMAND_FLASHCRC
+        payload = struct.pack("<II", start_address, end_address)
+        wire_payload = self.__build_payload_preamble(
+            command_type.code, payload_length=len(payload)
+        )
+        wire_payload += payload
+        _, response_payload = self.__send_and_parse_response(
+            payload=wire_payload, request_type=command_type
+        )
+        return struct.unpack("<I", response_payload)[0]
+
     def reboot_chip(self):
-        command_type = COMMAND_REBOOT.code
-        payload = self.__build_payload_preamble(command_type, payload_length=1)
+        command_type = COMMAND_REBOOT
+        payload = self.__build_payload_preamble(command_type.code, payload_length=1)
         payload += b"\xA5"
         self.serial.write(payload)
         self.serial.flush()
 
     def read_chip_info(self):
-        command_type = COMMAND_READCHIPINFO.code
-        payload = self.__build_payload_preamble(command_type)
+        command_type = COMMAND_READCHIPINFO
+        payload = self.__build_payload_preamble(command_type.code)
         response_type, response_payload = self.__send_and_parse_response(
-            payload=payload,
-            request_type=COMMAND_READCHIPINFO
+            payload=payload, request_type=command_type
         )
         if response_type == command_type:
             return response_payload.decode("utf8")
@@ -77,7 +91,9 @@ class BK7231Serial(object):
 
         while cur_addr < end_addr:
             try:
-                print(f"Reading 4k page at {cur_addr:#X}, first rebooting the device ({(((cur_addr-start_addr) / (end_addr-start_addr))*100):.2f}%)")
+                print(
+                    f"Reading 4k page at {cur_addr:#X}, first rebooting the device ({(((cur_addr-start_addr) / (end_addr-start_addr))*100):.2f}%)"
+                )
                 for _ in range(10):
                     self.reboot_chip()
                 if not self.__wait_for_link():
@@ -105,19 +121,21 @@ class BK7231Serial(object):
 
     def __read_flash_4k_operation(self, start_addr):
         payload = struct.pack("<I", start_addr)
+        command_type = COMMAND_READFLASH4K
 
         wire_payload = self.__build_payload_preamble(
-            COMMAND_READFLASH4K.code, len(payload), long_command=True
+            command_type.code, len(payload), long_command=True
         )
         wire_payload += payload
 
         while True:
-            response_type, response_payload = self.__send_and_parse_response(
-                payload=wire_payload,
-                request_type=COMMAND_READFLASH4K
+            _, response_payload = self.__send_and_parse_response(
+                payload=wire_payload, request_type=command_type
             )
-            if len(response_payload) != (4*1024) + 4:
-                print(f"Expected length {(4*1024) + 4}, but got {len(response_payload)}")
+            if len(response_payload) != (4 * 1024) + 4:
+                print(
+                    f"Expected length {(4*1024) + 4}, but got {len(response_payload)}"
+                )
                 raise SystemError("Chip got borked")
             address = struct.unpack("<I", response_payload[:4])[0]
             if address == start_addr:
@@ -136,7 +154,10 @@ class BK7231Serial(object):
                 self.serial.write(payload)
                 self.serial.flush()
                 data = self.serial.read_until(self.RESPONSE_PREAMBLE)
-                if len(data) == 0 or data[-len(self.RESPONSE_PREAMBLE):] != self.RESPONSE_PREAMBLE:
+                if (
+                    len(data) == 0
+                    or data[-len(self.RESPONSE_PREAMBLE) :] != self.RESPONSE_PREAMBLE
+                ):
                     raise ValueError("No response received")
 
                 response_length = struct.unpack("B", self.serial.read(1))[0]
@@ -157,11 +178,19 @@ class BK7231Serial(object):
                         # Invalid packet, so continue reading until a new valid packet is found
                         continue
 
-                    response_length, read_response_type = struct.unpack("<HH", self.serial.read(4))
+                    response_length, read_response_type = struct.unpack(
+                        "<HH", self.serial.read(4)
+                    )
                     response_length -= 2
                 else:
                     read_response_type = struct.unpack("B", self.serial.read(1))[0]
                     response_length -= 4
+
+                # Special case if the request type has a special response code - if so
+                # break out
+                if request_type.has_response_code and read_response_type == request_type.response_code:
+                    break
+
             except struct.error:
                 pass
 
@@ -174,7 +203,9 @@ class BK7231Serial(object):
             pass
         self.serial.timeout = self.timeout
 
-    def __build_payload_preamble(self, payload_type, payload_length=0, long_command=False):
+    def __build_payload_preamble(
+        self, payload_type, payload_length=0, long_command=False
+    ):
         payload = self.COMMON_COMMAND_PREAMBLE
         payload_length += 1
         if payload_length >= 0xFF or long_command:
@@ -224,9 +255,7 @@ def parse_args():
     parser_chip_info.set_defaults(handler=chip_info)
 
     parser_read_flash = subparsers.add_parser("read_flash", help="Read data from flash")
-    parser_read_flash.add_argument(
-        "file", help="File to store flash data"
-    )
+    parser_read_flash.add_argument("file", help="File to store flash data")
     parser_read_flash.add_argument(
         "-s",
         "--start-address",
