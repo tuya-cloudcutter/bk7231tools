@@ -151,7 +151,12 @@ class BK7231Serial(object):
                     continue
 
                 if is_long_command:
-                    data = self.serial.read_until(self.LONG_RESPONSE_MARKER)
+                    long_response_marker = self.serial.read(1)
+
+                    if long_response_marker != self.LONG_RESPONSE_MARKER:
+                        # Invalid packet, so continue reading until a new valid packet is found
+                        continue
+
                     response_length, read_response_type = struct.unpack("<HH", self.serial.read(4))
                     response_length -= 2
                 else:
