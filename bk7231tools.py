@@ -95,7 +95,7 @@ class BK7231Serial(object):
         else:
             raise ValueError("Invalid chip_info response")
 
-    def read_flash_4k(self, start_addr: int, segment_count: int=1):
+    def read_flash_4k(self, start_addr: int, segment_count: int = 1):
         if (start_addr & 0xFFF) != 0:
             raise ValueError(f"Starting address {start_addr:#x} is not 4K aligned")
         if start_addr < 0x10000:
