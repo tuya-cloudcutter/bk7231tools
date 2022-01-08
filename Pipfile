@@ -7,10 +7,7 @@ name = "pypi"
 pyserial = "*"
 
 [dev-packages]
-black = "*"
+autopep8 = "*"
 
 [requires]
 python_version = "3.7"
-
-[pipenv]
-allow_prereleases = true
