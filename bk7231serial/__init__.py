@@ -5,8 +5,8 @@ from typing import Tuple
 import serial
 from serial.serialutil import Timeout
 
-from commands import *
-from crc import crc32_ver2
+from .commands import *
+from .crc import crc32_ver2
 
 class BK7231Serial(object):
     COMMON_COMMAND_PREAMBLE = b"\x01\xe0\xfc"
