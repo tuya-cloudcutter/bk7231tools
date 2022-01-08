@@ -8,6 +8,7 @@ from serial.serialutil import Timeout
 from .commands import *
 from .crc import crc32_ver2
 
+
 class BK7231Serial(object):
     COMMON_COMMAND_PREAMBLE = b"\x01\xe0\xfc"
     LONG_COMMAND_MARKER = b"\xff\xf4"
@@ -38,19 +39,13 @@ class BK7231Serial(object):
     def read_flash_range_crc(self, start_address, end_address):
         command_type = COMMAND_FLASHCRC
         payload = struct.pack("<II", start_address, end_address)
-        wire_payload = self.__build_payload_preamble(
-            command_type.code, payload_length=len(payload)
-        )
-        wire_payload += payload
-        _, response_payload = self.__send_and_parse_response(
-            payload=wire_payload, request_type=command_type
-        )
+        payload = self.__build_payload(command_type.code, payload_body=payload)
+        _, response_payload = self.__send_and_parse_response(payload=payload, request_type=command_type)
         return struct.unpack("<I", response_payload)[0]
 
     def reboot_chip(self):
         command_type = COMMAND_REBOOT
-        payload = self.__build_payload_preamble(command_type.code, payload_length=1)
-        payload += b"\xA5"
+        payload = self.__build_payload(command_type.code, payload_body=b"\xA5")
         self.serial.write(payload)
         self.serial.flush()
 
@@ -58,19 +53,17 @@ class BK7231Serial(object):
         delay = 20
         command_type = COMMAND_SETBAUDRATE
         payload = struct.pack("<IB", rate, delay)
-        payload = self.__build_payload_preamble(command_type.code, payload_length=len(payload)) + payload
+        payload = self.__build_payload(command_type.code, payload)
         self.__send_payload(payload)
         time.sleep(delay/1000/2)
         self.serial.baudrate = rate
-        response_type, response = self.__read_response(command_type)
+        response_type, _ = self.__read_response(command_type)
         return response_type == command_type.code
 
     def read_chip_info(self):
         command_type = COMMAND_READCHIPINFO
-        payload = self.__build_payload_preamble(command_type.code)
-        response_type, response_payload = self.__send_and_parse_response(
-            payload=payload, request_type=command_type
-        )
+        payload = self.__build_payload(command_type.code)
+        response_type, response_payload = self.__send_and_parse_response(payload=payload, request_type=command_type)
         if response_type == command_type.code:
             return response_payload.decode("utf8")
         else:
@@ -80,9 +73,7 @@ class BK7231Serial(object):
         if (start_addr & 0xFFF) != 0:
             raise ValueError(f"Starting address {start_addr:#x} is not 4K aligned")
         if start_addr < 0x10000:
-            raise ValueError(
-                f"Starting address {start_addr:#x} is smaller than 0x10000"
-            )
+            raise ValueError(f"Starting address {start_addr:#x} is smaller than 0x10000")
 
         flash_data = bytearray()
         end_addr = start_addr + segment_count * 0x1000
@@ -105,15 +96,13 @@ class BK7231Serial(object):
         return flash_data
 
     def __wait_for_link(self, link_wait_timeout=0.01):
-        timeout = Timeout(10)
+        timeout = Timeout(self.timeout)
         self.serial.timeout = link_wait_timeout
         while not timeout.expired():
             try:
                 command_type = COMMAND_LINKCHECK
-                payload = self.__build_payload_preamble(command_type.code)
-                response_code, response_payload = self.__send_and_parse_response(
-                    payload=payload, request_type=command_type
-                )
+                payload = self.__build_payload(command_type.code)
+                response_code, response_payload = self.__send_and_parse_response(payload=payload, request_type=command_type)
                 if response_code == command_type.response_code and response_payload == b"\x00":
                     self.__drain()
                     self.serial.timeout = self.timeout
@@ -123,16 +112,12 @@ class BK7231Serial(object):
         return False
 
     def __read_flash_4k_operation(self, start_addr):
-        payload = struct.pack("<I", start_addr)
         command_type = COMMAND_READFLASH4K
-
-        wire_payload = self.__build_payload_preamble(
-            command_type.code, len(payload), long_command=True
-        )
-        wire_payload += payload
+        payload = struct.pack("<I", start_addr)
+        payload = self.__build_payload(command_type.code, payload, long_command=True)
 
         while True:
-            _, response_payload = self.__send_and_parse_response(payload=wire_payload, request_type=command_type)
+            _, response_payload = self.__send_and_parse_response(payload=payload, request_type=command_type)
             if len(response_payload) != (4 * 1024) + 4:
                 print(f"Expected length {(4 * 1024) + 4}, but got {len(response_payload)}")
                 raise SystemError("Chip got borked")
@@ -216,6 +201,12 @@ class BK7231Serial(object):
             payload += struct.pack("B", payload_length)
         payload += struct.pack("B", payload_type)
         return payload
+
+    def __build_payload(self, payload_type, payload_body=None, long_command=False):
+        if payload_body is None:
+            payload_body = b''
+        preamble = self.__build_payload_preamble(payload_type, len(payload_body), long_command=long_command)
+        return preamble + payload_body
 
 
 __all__ = ['BK7231Serial']
