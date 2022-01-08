@@ -1,6 +1,7 @@
 import argparse
 import sys
 import traceback
+from contextlib import closing
 from typing import List
 
 from bk7231serial import BK7231Serial
@@ -70,8 +71,7 @@ if __name__ == "__main__":
     args = parse_args()
 
     try:
-        device = connect_device(args.device, args.baudrate, args.timeout)
-        args.handler(device, args)
-        device.close()
+        with closing(connect_device(args.device, args.baudrate, args.timeout)) as device:
+            args.handler(device, args)
     except TimeoutError:
         print(traceback.format_exc(), file=sys.stderr)
