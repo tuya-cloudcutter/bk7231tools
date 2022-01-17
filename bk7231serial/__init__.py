@@ -18,6 +18,8 @@ class BK7231Serial(object):
     RESPONSE_DATA_MARKER = COMMON_COMMAND_PREAMBLE
     LONG_RESPONSE_MARKER = b"\xf4"
 
+    MAX_FAIL_COUNT = 100
+
     def __init__(self, device, baudrate, timeout=10.0):
         initial_baudrate = 115200
         self.device = device
@@ -79,6 +81,7 @@ class BK7231Serial(object):
         flash_data = bytearray()
         end_addr = start_addr + segment_count * 0x1000
         cur_addr = start_addr
+        fail_count = 0
 
         while cur_addr < end_addr:
             try:
@@ -90,9 +93,12 @@ class BK7231Serial(object):
                     flash_data += block
                     cur_addr += 0x1000
                 else:
-                    print("Y'all dun goofed now with ya'll corrupt bytes!")
-            except ValueError:
-                pass
+                    raise ValueError(f"Expected CRC value {crc:#x} does not match calculated CRC value {actual_crc:#x}")
+
+            except ValueError as e:
+                fail_count += 1
+                if fail_count > self.MAX_FAIL_COUNT:
+                    raise e
 
         return flash_data
 
@@ -117,16 +123,14 @@ class BK7231Serial(object):
         payload = struct.pack("<I", start_addr)
         payload = self.__build_payload(command_type.code, payload, long_command=True)
 
-        while True:
-            _, response_payload = self.__send_and_parse_response(payload=payload, request_type=command_type)
-            if len(response_payload) != (4 * 1024) + 4:
-                print(f"Expected length {(4 * 1024) + 4}, but got {len(response_payload)}")
-                raise SystemError("Chip got borked")
-            address = struct.unpack("<I", response_payload[:4])[0]
-            if address == start_addr:
-                break
-            else:
-                print("Retrying read")
+        _, response_payload = self.__send_and_parse_response(payload=payload, request_type=command_type)
+        
+        if len(response_payload) != (4 * 1024) + 4:
+            raise SystemError(f"Expected length {(4 * 1024) + 4}, but got {len(response_payload)}")
+
+        address = struct.unpack("<I", response_payload[:4])[0]
+        if address != start_addr:
+            raise SystemError(f"Invalid read. Requested address {start_addr:#x} does not match returned address {address:#x}")
 
         return response_payload[4:]
 
