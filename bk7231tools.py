@@ -34,7 +34,7 @@ def chip_info(device: BK7231Serial, args: List[str]):
 
 def read_flash(device: BK7231Serial, args: List[str]):
     with open(args.file, "wb") as fs:
-        fs.write(device.read_flash_4k(args.start_address, args.count, args.verify_checksum))
+        fs.write(device.read_flash_4k(args.start_address, args.count, not args.no_verify_checksum))
 
 
 def parse_args():
@@ -69,11 +69,11 @@ def parse_args():
         help="Number of 4K segments to read from flash (default: 16 segments = 64K)",
     )
     parser_read_flash.add_argument(
-        "--verify-checksum",
-        dest="verify_checksum",
+        "--no-verify-checksum",
+        dest="no_verify_checksum",
         action="store_true",
-        default=True,
-        help="Verify checksum of retrieved flash segments and fail if they do not match (default: True)",
+        default=False,
+        help="Do not verify checksum of retrieved flash segments and fail if they do not match (default: False)",
     )
     parser_read_flash.set_defaults(handler=read_flash)
     parser_read_flash.set_defaults(device_required=True)
