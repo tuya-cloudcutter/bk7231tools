@@ -4,7 +4,7 @@ import traceback
 from contextlib import closing
 from typing import List
 
-from bk7231serial import BK7231Serial
+from bk7231tools.serial import BK7231Serial
 
 def __add_serial_args(parser: argparse.ArgumentParser):
     parser.add_argument("-d", "--device", required=True, help="Serial device path")
