@@ -7,7 +7,6 @@ import serial
 from serial.serialutil import Timeout
 
 from .commands import *
-from .crc import crc32_ver2
 
 
 class BK7231Serial(object):
@@ -88,7 +87,7 @@ class BK7231Serial(object):
                 print(f"Reading 4k page at {cur_addr:#X} ({(((cur_addr - start_addr) / (end_addr - start_addr)) * 100):.2f}%)")
                 block = self.__read_flash_4k_operation(cur_addr)
                 crc = self.read_flash_range_crc(cur_addr, cur_addr+0x1000)
-                actual_crc = crc32_ver2(0xFFFFFFFF, block)
+                actual_crc = zlib.crc32(block) ^ 0xFFFFFFFF
                 if (crc == actual_crc) and crc_check or not crc_check:
                     flash_data += block
                     cur_addr += 0x1000
