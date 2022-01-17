@@ -1,6 +1,7 @@
 import struct
 import time
 from typing import Tuple
+import zlib
 
 import serial
 from serial.serialutil import Timeout
@@ -69,7 +70,7 @@ class BK7231Serial(object):
         else:
             raise ValueError("Invalid chip_info response")
 
-    def read_flash_4k(self, start_addr: int, segment_count: int = 1):
+    def read_flash_4k(self, start_addr: int, segment_count: int = 1, crc_check: bool = True):
         if (start_addr & 0xFFF) != 0:
             raise ValueError(f"Starting address {start_addr:#x} is not 4K aligned")
         if start_addr < 0x10000:
@@ -85,12 +86,12 @@ class BK7231Serial(object):
                 block = self.__read_flash_4k_operation(cur_addr)
                 crc = self.read_flash_range_crc(cur_addr, cur_addr+0x1000)
                 actual_crc = crc32_ver2(0xFFFFFFFF, block)
-                if crc == actual_crc:
+                if (crc == actual_crc) and crc_check or not crc_check:
                     flash_data += block
                     cur_addr += 0x1000
                 else:
                     print("Y'all dun goofed now with ya'll corrupt bytes!")
-            except:
+            except ValueError:
                 pass
 
         return flash_data
