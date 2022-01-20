@@ -67,7 +67,7 @@ def dissect_dump_file(args):
                             filepath = os.path.join(
                                 output_directory, f"{dumpfile_name}_{container.header.name}_{container.header.version}.bin")
                             with open(filepath, "wb") as fsout:
-                                fsout.write(container.payload)
+                                container.write_to_bytestream(fsout, payload_only=(not args.rbl))
                             print(f" - extracted to {filepath}")
                     else:
                         print(f"{container.header.name} - INVALID PAYLOAD")
@@ -134,6 +134,8 @@ def parse_args():
                                      help="Output directory for extracted RBL files (default: current working directory)")
     parser_dissect_dump.add_argument("-e", "--extract", action="store_true", default=False,
                                      help="Extract identified RBL containers instead of outputting information only (default: False)")
+    parser_dissect_dump.add_argument("--rbl", action="store_true", default=False,
+                                     help="Extract the RBL container instead of just its payload (default: False)")
     parser_dissect_dump.set_defaults(handler=dissect_dump_file)
     parser_dissect_dump.set_defaults(device_required=False)
 
