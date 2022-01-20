@@ -1,10 +1,14 @@
 import argparse
+import os
 import sys
 import traceback
 from contextlib import closing
+from pathlib import Path
 from typing import List
 
+from bk7231tools.analysis import flash, rbl
 from bk7231tools.serial import BK7231Serial
+
 
 def __add_serial_args(parser: argparse.ArgumentParser):
     parser.add_argument("-d", "--device", required=True, help="Serial device path")
@@ -22,6 +26,51 @@ def __add_serial_args(parser: argparse.ArgumentParser):
         help="Timeout for operations in seconds (default: 10.0)",
     )
     return parser
+
+
+def __ensure_output_dir_exists(output_dir):
+    if not os.path.exists(output_dir):
+        os.mkdir(output_dir)
+    return output_dir
+
+
+def dissect_dump_file(args):
+    dumpfile = args.file
+    flash_layout = args.layout
+    output_directory = args.output_dir or os.getcwd()
+    layout = flash.FLASH_LAYOUTS.get(flash_layout, None)
+    dumpfile_name = Path(dumpfile).stem
+
+    if args.extract:
+        output_directory = __ensure_output_dir_exists(output_directory)
+
+    with open(dumpfile, "rb") as fs:
+        indices = rbl.find_rbl_containers_indices(fs)
+        containers = []
+        if indices:
+            print("RBL containers:")
+            for idx in indices:
+                print(f"\t{idx:#x}: ", end="")
+                container = None
+                try:
+                    fs.seek(idx, os.SEEK_SET)
+                    container = rbl.Container.from_bytestream(fs, layout)
+                except ValueError as e:
+                    print(f"FAILED TO PARSE - {e.args[0]}")
+                if container is not None:
+                    containers.append(container)
+                    if container.payload is not None:
+                        ending = "" if args.extract else "\n"
+                        print(
+                            f"{container.header.name} - [encoding_algorithm={container.header.algo.name}, size={len(container.payload):#x}]", end=ending)
+                        if args.extract:
+                            filepath = os.path.join(
+                                output_directory, f"{dumpfile_name}_{container.header.name}_{container.header.version}.bin")
+                            with open(filepath, "wb") as fsout:
+                                fsout.write(container.payload)
+                            print(f" - extracted to {filepath}")
+                    else:
+                        print(f"{container.header.name} - INVALID PAYLOAD")
 
 
 def connect_device(device, baudrate, timeout):
@@ -77,6 +126,16 @@ def parse_args():
     )
     parser_read_flash.set_defaults(handler=read_flash)
     parser_read_flash.set_defaults(device_required=True)
+
+    parser_dissect_dump = subparsers.add_parser("dissect_dump", help="Dissect and extract RBL containers from flash dump files")
+    parser_dissect_dump.add_argument("file", help="Flash dump file to dissect")
+    parser_dissect_dump.add_argument("-l", "--layout", default="ota_1", help="Flash layout used to generate the dump file (default: ota_1)")
+    parser_dissect_dump.add_argument("-O", "--output-dir", dest="output_dir", default="",
+                                     help="Output directory for extracted RBL files (default: current working directory)")
+    parser_dissect_dump.add_argument("-e", "--extract", action="store_true", default=False,
+                                     help="Extract identified RBL containers instead of outputting information only (default: False)")
+    parser_dissect_dump.set_defaults(handler=dissect_dump_file)
+    parser_dissect_dump.set_defaults(device_required=False)
 
     return parser.parse_args()
 
