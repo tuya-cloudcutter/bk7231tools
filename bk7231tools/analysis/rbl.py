@@ -56,7 +56,7 @@ class Header:
         data_tuple = astuple(self)
         def encode_str(x): return x if not isinstance(x, str) else x.encode('utf-8')
         data_tuple = tuple(map(encode_str, data_tuple))
-        return self.FORMAT.pack(astuple(self))
+        return self.FORMAT.pack(*data_tuple)
 
     @classmethod
     def __validate_data(cls, data: bytes, info_crc32: int):
@@ -70,9 +70,6 @@ __HEADER_MAGIC_NEEDLE = bytes([Header.MAGIC[0]]), Header.MAGIC[1:]
 
 
 class Container(object):
-    header: Header
-    payload: bytes
-
     def __init__(self, header: Header, payload: bytes):
         self.header = header
         self.payload = payload
@@ -109,6 +106,13 @@ class Container(object):
             payload = None
 
         return cls(header, payload)
+
+    def write_to_bytestream(self, bytestream: io.BytesIO, payload_only=True):
+        if self.payload is None:
+            raise ValueError("Container has invalid payload")
+        if not payload_only:
+            bytestream.write(self.header.to_bytes())
+        bytestream.write(self.payload)
 
     @classmethod
     def __create_bytestream_for_layout(cls, header: Header, bytestream: io.BytesIO, flash_layout: FlashLayout) -> io.BytesIO:
