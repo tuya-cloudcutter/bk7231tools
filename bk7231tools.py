@@ -82,6 +82,9 @@ def chip_info(device: BK7231Serial, args: List[str]):
 
 
 def read_flash(device: BK7231Serial, args: List[str]):
+    if args.start_address <= 0x10000:
+        print(f"Flash read start address {args.start_address:#x} is not greater than 0x10000 - adding 0x2000000 to bypass bootloader checks")
+        args.start_address += 0x2000000
     with open(args.file, "wb") as fs:
         fs.write(device.read_flash_4k(args.start_address, args.count, not args.no_verify_checksum))
 
