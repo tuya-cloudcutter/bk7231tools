@@ -97,7 +97,7 @@ class Container(object):
         bytestream = cls.__create_bytestream_for_layout(
             header, bytestream, flash_layout)
         payload = bytestream.read(header.size_package)
-        # TODO: implement quicklz support
+        # TODO: implement AES and GZIP support
         if header.algo == OTAAlgorithm.NONE:
             padding = header.size_package - header.size_raw
             payload = payload[:header.size_raw] + (bytes([padding]) * padding)
