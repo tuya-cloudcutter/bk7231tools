@@ -4,6 +4,9 @@ This is a collection of tools to interact with and analyze artifacts for BK7231 
 ## Installation
 Install the dependencies and set up a Python virtualenv using `pipenv install`. Subsequent invocations can be done in a shell context after executing `pipenv shell` or by using `pipenv run <command>`.
 
+## ⚠️ WARNING⚠️
+Please be aware that this software is provided without any guarantees from the authors. If you will still use it, then please be aware and certain that you understand what it is doing and that you do so at your own risk and that the authors cannot be held accountable for any damages that arise.
+
 ## Usage
 There are a couple of usage modes for this toolset. One invovles dissecting already extracted flash artifacts and therefore does not require interaction with the device. The other mode can be abstracted under "device interaction", which could involve chip identification, reading flash, etc.
 
