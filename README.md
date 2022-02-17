@@ -28,6 +28,9 @@ $ pipenv run python bk7231tools.py read_flash -d /dev/ttyUSB0 -s 0 -c 512 dump.b
 
 The toolset will then attempt to connect to the MCU and perform the requested operation. During the connection attempt process, it may be the case that the device is not reset (in case RTS signal is not hooked up as well). If that's the case, the connection will fail. In order to remedy this issue, manually reset the device by disconnecting its power (but not the UART bridge!) a few times after issuing the command.
 
+#### Note for reading BK7231N devices' flash
+Reading flash for BK7231N devices is slightly different, since the protocol seems to provide incorrect CRCs when requested. Currently, the toolset can read BK7231N flash information, but CRC validation is unfortunately not working. In order to work around this issue, the `read_flash` subcommand can be invoked with the `--no-verify-checksum` flag to skip CRC validation.
+
 ### Dissecting flash dumps
 Once a flash dump has been acquired, it can be dissected into its constituents by invoking the `dissect_dump` subcommand. For example, to dissect and extract artifacts from the flash dump file produced by the command in [flash reading](#flash-reading):
 

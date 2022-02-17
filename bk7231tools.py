@@ -125,7 +125,7 @@ def parse_args():
         dest="no_verify_checksum",
         action="store_true",
         default=False,
-        help="Do not verify checksum of retrieved flash segments and fail if they do not match (default: False)",
+        help="Must be used for BK7231N devices. Do not verify checksum of retrieved flash segments and fail if they do not match (default: False)",
     )
     parser_read_flash.set_defaults(handler=read_flash)
     parser_read_flash.set_defaults(device_required=True)
