@@ -147,9 +147,12 @@ class Container(object):
         else:
             pass
 
-        while block := bytestream.read(32):
+        block = bytestream.read(32)
+        while block:
             new_stream.write(block)
             bytestream.read(2)
+            block = bytestream.read(32)
+
         bytestream.seek(start_position, os.SEEK_SET)
         new_stream.seek(0, os.SEEK_SET)
         return new_stream
@@ -160,11 +163,13 @@ def find_rbl_containers_indices(bytestream: io.BytesIO) -> List[int]:
     rbl_locations = []
     magic_needle = __HEADER_MAGIC_NEEDLE[0]
     magic_remainder = __HEADER_MAGIC_NEEDLE[1]
-    while c := bytestream.read(len(magic_needle)):
+    c = bytestream.read(len(magic_needle))
+    while c:
         location = bytestream.tell() - 1
         if c == magic_needle:
             remainder = bytestream.read(len(magic_remainder))
             if remainder == magic_remainder:
                 rbl_locations.append(location)
+        c = bytestream.read(len(magic_needle))
     bytestream.seek(oldpos, os.SEEK_SET)
     return rbl_locations
