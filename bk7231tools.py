@@ -1,4 +1,5 @@
 import argparse
+import io
 import os
 import sys
 import traceback
@@ -6,7 +7,7 @@ from contextlib import closing
 from pathlib import Path
 from typing import List
 
-from bk7231tools.analysis import flash, rbl
+from bk7231tools.analysis import flash, rbl, utils
 from bk7231tools.serial import BK7231Serial
 
 
@@ -34,19 +35,15 @@ def __ensure_output_dir_exists(output_dir):
     return output_dir
 
 
-def dissect_dump_file(args):
-    dumpfile = args.file
-    flash_layout = args.layout
-    output_directory = args.output_dir or os.getcwd()
-    layout = flash.FLASH_LAYOUTS.get(flash_layout, None)
+def __generate_payload_output_file_path(dumpfile: str, payload_name: str, output_directory: str, extra_tag: str) -> str:
     dumpfile_name = Path(dumpfile).stem
+    return os.path.join(output_directory, f"{dumpfile_name}_{payload_name}_{extra_tag}.bin")
 
-    if args.extract:
-        output_directory = __ensure_output_dir_exists(output_directory)
 
+def __carve_and_write_rbl_containers(dumpfile: str, layout: flash.FlashLayout, output_directory: str, extract: bool = False, with_rbl: bool = False) -> List[rbl.Container]:
+    containers = []
     with open(dumpfile, "rb") as fs:
         indices = rbl.find_rbl_containers_indices(fs)
-        containers = []
         if indices:
             print("RBL containers:")
             for idx in indices:
@@ -60,17 +57,99 @@ def dissect_dump_file(args):
                 if container is not None:
                     containers.append(container)
                     if container.payload is not None:
-                        ending = "" if args.extract else "\n"
+                        ending = "" if extract else "\n"
                         print(
                             f"{container.header.name} - [encoding_algorithm={container.header.algo.name}, size={len(container.payload):#x}]", end=ending)
-                        if args.extract:
-                            filepath = os.path.join(
-                                output_directory, f"{dumpfile_name}_{container.header.name}_{container.header.version}.bin")
+                        if extract:
+                            filepath = __generate_payload_output_file_path(
+                                dumpfile=dumpfile, payload_name=container.header.name, output_directory=output_directory, extra_tag=container.header.version)
                             with open(filepath, "wb") as fsout:
-                                container.write_to_bytestream(fsout, payload_only=(not args.rbl))
+                                container.write_to_bytestream(fsout, payload_only=(not with_rbl))
                             print(f" - extracted to {filepath}")
                     else:
                         print(f"{container.header.name} - INVALID PAYLOAD")
+    return containers
+
+
+def __scan_pattern_find_payload(dumpfile: str, partition_name: str, layout: flash.FlashLayout, output_directory: str, extract: bool = False):
+    if not partition_name in {p.name for p in layout.partitions}:
+        raise ValueError(f"Partition name {partition_name} is unknown in layout {layout.name}")
+
+    final_payload_data = None
+    partition = list(filter(lambda p: p.name == partition_name, layout.partitions))[0]
+    with open(dumpfile, "rb") as fs:
+        fs.seek(partition.start_address, os.SEEK_SET)
+        data = fs.read(partition.size)
+        i = partition.size
+        while i > 0:
+            datablock = data[i-16:i]
+            # Scan for a block of 16 FF bytes, indicating padding at the end of a partition.
+            # This is to ignore RBL headers and other metadata while scanning.
+            if datablock == (b"\xFF" * 16):
+                break
+            i -= 16
+        if i <= 0:
+            raise ValueError(f"Could not find end of partition for {partition.name}")
+
+        # Now do a pattern scan until we hit the first CRC-16 block
+        # and the padding block right before it
+        while i > 0:
+            datablock = data[i-16:i]
+            if datablock != (b"\xFF" * 16) and data[i-32:i-16] == (b"\xFF" * 16):
+                # This is exactly after the last 0xFF padding block including its CRC-16 checksum
+                i = (i - 16 + 2)
+                break
+            i -= 16
+        payload = data[:i]
+
+        block_io_stream = io.BytesIO(payload)
+        final_payload = io.BytesIO()
+        block = block_io_stream.read(32)
+        while block:
+            crc_bytes = block_io_stream.read(2)
+            if not utils.block_crc_check(block, crc_bytes):
+                # Workaround for payloads with partially overwritten partitions
+                # Could also scan from start to FF padding blocks as an alternative
+                if (block + crc_bytes) == (b"\xFF" * 34):
+                    break
+                else:
+                    raise ValueError(f"Block level CRC-16 checks failed while analyzing partition {partition.name}")
+            final_payload.write(block)
+            block = block_io_stream.read(32)
+
+        final_payload_data = final_payload.getbuffer()
+
+    if final_payload_data is not None and extract:
+        filepath = __generate_payload_output_file_path(dumpfile, payload_name=partition_name,
+                                                       output_directory=output_directory, extra_tag="pattern_scan")
+        with open(filepath, "wb") as fs:
+            fs.write(final_payload_data)
+
+    return final_payload_data
+
+
+def dissect_dump_file(args):
+    dumpfile = args.file
+    flash_layout = args.layout
+    default_output_dir = os.getcwd()
+    output_directory = args.output_dir or default_output_dir
+    layout = flash.FLASH_LAYOUTS.get(flash_layout, None)
+
+    if output_directory != default_output_dir and not args.extract:
+        print("Output directory is different from default: assuming -e (extract) is desired")
+        args.extract = True
+
+    if args.extract:
+        output_directory = __ensure_output_dir_exists(output_directory)
+
+    containers = __carve_and_write_rbl_containers(dumpfile=dumpfile, layout=layout,
+                                                  output_directory=output_directory, extract=args.extract, with_rbl=args.rbl)
+    container_names = {container.header.name for container in containers if container.payload is not None}
+    missing_rbl_containers = {part.name for part in layout.partitions} - container_names
+    for missing in missing_rbl_containers:
+        print(f"Missing {missing} container. Using a scan pattern instead")
+        __scan_pattern_find_payload(dumpfile, partition_name=missing, layout=layout,
+                                    output_directory=output_directory, extract=args.extract)
 
 
 def connect_device(device, baudrate, timeout):
@@ -83,7 +162,8 @@ def chip_info(device: BK7231Serial, args: List[str]):
 
 def read_flash(device: BK7231Serial, args: List[str]):
     if args.start_address <= 0x10000:
-        print(f"Flash read start address {args.start_address:#x} is not greater than 0x10000 - adding 0x2000000 to bypass bootloader checks")
+        print(
+            f"Flash read start address {args.start_address:#x} is not greater than 0x10000 - adding 0x2000000 to bypass bootloader checks")
         args.start_address += 0x2000000
     with open(args.file, "wb") as fs:
         fs.write(device.read_flash_4k(args.start_address, args.count, not args.no_verify_checksum))
