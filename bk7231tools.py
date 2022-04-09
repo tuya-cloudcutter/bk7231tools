@@ -119,11 +119,15 @@ def __scan_pattern_find_payload(dumpfile: str, partition_name: str, layout: flas
 
         final_payload_data = final_payload.getbuffer()
 
-    if final_payload_data is not None and extract:
-        filepath = __generate_payload_output_file_path(dumpfile, payload_name=partition_name,
-                                                       output_directory=output_directory, extra_tag="pattern_scan")
-        with open(filepath, "wb") as fs:
-            fs.write(final_payload_data)
+    if final_payload_data is not None:
+        ending = " - " if extract else "\n"
+        print(f"\t{partition.start_address:#x}: {partition.name} - [NO RBL, size={len(final_payload_data):#x}]", end=ending)
+        if extract:
+            filepath = __generate_payload_output_file_path(dumpfile, payload_name=partition_name,
+                                                        output_directory=output_directory, extra_tag="pattern_scan")
+            with open(filepath, "wb") as fs:
+                fs.write(final_payload_data)
+            print(f"written to {filepath}")
 
     return final_payload_data
 
@@ -147,7 +151,7 @@ def dissect_dump_file(args):
     container_names = {container.header.name for container in containers if container.payload is not None}
     missing_rbl_containers = {part.name for part in layout.partitions} - container_names
     for missing in missing_rbl_containers:
-        print(f"Missing {missing} container. Using a scan pattern instead")
+        print(f"Missing {missing} RBL container. Using a scan pattern instead")
         __scan_pattern_find_payload(dumpfile, partition_name=missing, layout=layout,
                                     output_directory=output_directory, extract=args.extract)
 
