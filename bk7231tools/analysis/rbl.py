@@ -6,14 +6,8 @@ from enum import IntFlag
 from typing import ClassVar, List
 from zlib import crc32
 
-from .crc16 import crc16
 from .flash import FlashLayout
-
-
-def _block_crc_check(block: bytes, crc_bytes: bytes) -> bool:
-    calculated = crc16(block, initial_value=0xffff)
-    unpacked_crc = (struct.unpack(">H", crc_bytes)[0] & 0xffff)
-    return calculated == unpacked_crc
+from .utils import block_crc_check
 
 
 class OTAAlgorithm(IntFlag):
@@ -140,9 +134,9 @@ class Container(object):
         new_stream = io.BytesIO()
         start_position = bytestream.tell()
         crc_blocks = bytestream.read(36)
-        if _block_crc_check(crc_blocks[:32], crc_blocks[32:34]):
+        if block_crc_check(crc_blocks[:32], crc_blocks[32:34]):
             bytestream.seek(start_position, os.SEEK_SET)
-        elif _block_crc_check(crc_blocks[2:34], crc_blocks[34:36]):
+        elif block_crc_check(crc_blocks[2:34], crc_blocks[34:36]):
             bytestream.seek(start_position+2, os.SEEK_SET)
         else:
             pass
