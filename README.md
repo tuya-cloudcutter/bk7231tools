@@ -42,3 +42,4 @@ RBL containers:
         0x129f0a: app - [encoding_algorithm=NONE, size=0xfd340] - extracted to dump_extract_dir/dump_app_1.00.bin
 ```
 The above command flags are `-e` to extract - otherwise only a listing is shown and `-O` to write the extracted files to the specified directory (`dump_extract_dir`).
+Combined with `--rbl`, you can also extract fully reconstructed RBL files for later usage.
