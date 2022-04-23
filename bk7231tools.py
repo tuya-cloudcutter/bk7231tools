@@ -102,18 +102,28 @@ def __scan_pattern_find_payload(dumpfile: str, partition_name: str, layout: flas
             i -= 16
         payload = data[:i]
 
+        # Extra check for dealing with weird dumps, this essentially
+        # changes the pattern scan to purely a moving block read
+        # and CRC validation from the start of the partition
+        if not payload:
+            fs.seek(partition.start_address, os.SEEK_SET)
+            payload = fs.read(partition.size)
+
         block_io_stream = io.BytesIO(payload)
         final_payload = io.BytesIO()
         block = block_io_stream.read(32)
+        first = True
         while block:
             crc_bytes = block_io_stream.read(2)
             if not utils.block_crc_check(block, crc_bytes):
-                # Workaround for payloads with partially overwritten partitions
-                # Could also scan from start to FF padding blocks as an alternative
-                if (block + crc_bytes) == (b"\xFF" * 34):
-                    break
+                if first:
+                    raise ValueError(f"First block level CRC-16 checks failed while analyzing partition {partition.name}")
                 else:
-                    raise ValueError(f"Block level CRC-16 checks failed while analyzing partition {partition.name}")
+                    # One of the CRC checks after the first one has failed, so either
+                    # end of stream has been reached or the dump is mangled.
+                    # In both cases, not much to do hence bail out assuming it's fine
+                    break
+            first = False
             final_payload.write(block)
             block = block_io_stream.read(32)
 
