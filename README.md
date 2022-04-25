@@ -38,8 +38,12 @@ Once a flash dump has been acquired, it can be dissected into its constituents b
 $ pipenv run python bk7231tools.py dissect_dump -e -O dump_extract_dir dump.bin
 
 RBL containers:
-        0x10f9a: bootloader - [encoding_algorithm=NONE, size=0xdd40] - extracted to dump_extract_dir/dump_bootloader_1.00.bin
-        0x129f0a: app - [encoding_algorithm=NONE, size=0xfd340] - extracted to dump_extract_dir/dump_app_1.00.bin
+        0x10f9a: bootloader - [encoding_algorithm=NONE, size=0xdd40]
+                extracted to dump_extract_dir
+        0x129f0a: app - [encoding_algorithm=NONE, size=0xfd340]
+                extracted to dump_extract_dir
 ```
 The above command flags are `-e` to extract - otherwise only a listing is shown and `-O` to write the extracted files to the specified directory (`dump_extract_dir`).
 Combined with `--rbl`, you can also extract fully reconstructed RBL files for later usage.
+
+Extracted artifacts are dependent on the flash layout supplied, but usually there are two partitions `app` and `bootloader`. If an extracted partition is also a known encrypted code partition (e.g. `app`), its decrypted version is also extracted with the suffix `_decrypted.bin`.
