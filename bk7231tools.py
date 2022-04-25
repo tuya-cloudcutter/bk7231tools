@@ -1,4 +1,5 @@
 import argparse
+import base64
 import io
 import os
 import sys
@@ -8,6 +9,7 @@ from pathlib import Path
 from typing import List
 
 from bk7231tools.analysis import flash, rbl, utils
+from bk7231tools.crypto.code import BekenCodeCipher
 from bk7231tools.serial import BK7231Serial
 
 
@@ -40,6 +42,15 @@ def __generate_payload_output_file_path(dumpfile: str, payload_name: str, output
     return os.path.join(output_directory, f"{dumpfile_name}_{payload_name}_{extra_tag}.bin")
 
 
+def __decrypt_code_partition(partition: flash.FlashPartition, payload: bytes):
+    CODE_PARTITION_COEFFICIENTS = base64.b64decode("UQ+wk6PL6txZk6F+x63rAw==")
+    coefficients = (CODE_PARTITION_COEFFICIENTS[i:i+4] for i in range(0, len(CODE_PARTITION_COEFFICIENTS), 4))
+    coefficients = tuple(int.from_bytes(i, byteorder='big') for i in coefficients)
+
+    cipher = BekenCodeCipher(coefficients)
+    return cipher.decrypt(payload, partition.mapped_address)
+
+
 def __carve_and_write_rbl_containers(dumpfile: str, layout: flash.FlashLayout, output_directory: str, extract: bool = False, with_rbl: bool = False) -> List[rbl.Container]:
     containers = []
     with open(dumpfile, "rb") as fs:
@@ -57,15 +68,27 @@ def __carve_and_write_rbl_containers(dumpfile: str, layout: flash.FlashLayout, o
                 if container is not None:
                     containers.append(container)
                     if container.payload is not None:
-                        ending = "" if extract else "\n"
                         print(
-                            f"{container.header.name} - [encoding_algorithm={container.header.algo.name}, size={len(container.payload):#x}]", end=ending)
+                            f"{container.header.name} - [encoding_algorithm={container.header.algo.name}, size={len(container.payload):#x}]")
+                        partition = layout.partitions[0]
+                        for p in layout.partitions:
+                            if p.name == container.header.name:
+                                partition = p
+                                break
                         if extract:
+                            extra_tag = container.header.version
                             filepath = __generate_payload_output_file_path(
-                                dumpfile=dumpfile, payload_name=container.header.name, output_directory=output_directory, extra_tag=container.header.version)
+                                dumpfile=dumpfile, payload_name=container.header.name, output_directory=output_directory, extra_tag=extra_tag)
                             with open(filepath, "wb") as fsout:
                                 container.write_to_bytestream(fsout, payload_only=(not with_rbl))
-                            print(f" - extracted to {filepath}")
+
+                            extra_tag = f"{container.header.version}_decrypted"
+                            decryptedpath = __generate_payload_output_file_path(
+                                dumpfile=dumpfile, payload_name=container.header.name, output_directory=output_directory, extra_tag=extra_tag)
+                            with open(decryptedpath, "wb") as fsout:
+                                fsout.write(__decrypt_code_partition(partition, container.payload))
+
+                            print(f"\t\textracted to {output_directory}")
                     else:
                         print(f"{container.header.name} - INVALID PAYLOAD")
     return containers
@@ -130,14 +153,20 @@ def __scan_pattern_find_payload(dumpfile: str, partition_name: str, layout: flas
         final_payload_data = final_payload.getbuffer()
 
     if final_payload_data is not None:
-        ending = " - " if extract else "\n"
-        print(f"\t{partition.start_address:#x}: {partition.name} - [NO RBL, size={len(final_payload_data):#x}]", end=ending)
+        print(f"\t{partition.start_address:#x}: {partition.name} - [NO RBL, size={len(final_payload_data):#x}]")
         if extract:
+            extra_tag = "pattern_scan"
             filepath = __generate_payload_output_file_path(dumpfile, payload_name=partition_name,
-                                                        output_directory=output_directory, extra_tag="pattern_scan")
+                                                           output_directory=output_directory, extra_tag=extra_tag)
             with open(filepath, "wb") as fs:
                 fs.write(final_payload_data)
-            print(f"written to {filepath}")
+
+            extra_tag = "pattern_scan_decrypted"
+            decryptedpath = __generate_payload_output_file_path(dumpfile, payload_name=partition_name,
+                                                                output_directory=output_directory, extra_tag=extra_tag)
+            with open(decryptedpath, "wb") as fs:
+                fs.write(__decrypt_code_partition(partition, final_payload_data))
+            print(f"\t\textracted to {output_directory}")
 
     return final_payload_data
 
