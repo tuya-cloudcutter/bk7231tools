@@ -69,6 +69,13 @@ class BekenCodeCipher(object):
     def decrypt(self, data: bytes, stream_start_offset: int = 0):
         return self.encrypt(data, stream_start_offset=stream_start_offset)
 
+    def pad(self, data: bytes):
+        data_rem = len(data) % self.BLOCK_LENGTH_BYTES
+        result = data
+        if data_rem != 0:
+            result += b"\xFF" * (self.BLOCK_LENGTH_BYTES - data_rem)
+        return result
+
     def _encrypt_block(self, block: bytes, block_start_offset: int):
         if len(block) != self.BLOCK_LENGTH_BYTES:
             raise ValueError(f"Block length must be exactly {self.BLOCK_LENGTH_BYTES} bytes")
@@ -77,9 +84,9 @@ class BekenCodeCipher(object):
 
         encrypted = bytearray()
         for i in range(0, len(block), WORD_SIZE):
-            word = int.from_bytes(block[i:i+WORD_SIZE], byteorder='little')
+            word = int.from_bytes(block[i:i+WORD_SIZE], byteorder="little")
             encrypted_word = self._encrypt_word(block_start_offset + i, word)
-            encrypted.extend(encrypted_word.to_bytes(WORD_SIZE, byteorder='little'))
+            encrypted.extend(encrypted_word.to_bytes(WORD_SIZE, byteorder="little"))
 
         return encrypted
 

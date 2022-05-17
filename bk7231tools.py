@@ -48,7 +48,8 @@ def __decrypt_code_partition(partition: flash.FlashPartition, payload: bytes):
     coefficients = tuple(int.from_bytes(i, byteorder='big') for i in coefficients)
 
     cipher = BekenCodeCipher(coefficients)
-    return cipher.decrypt(payload, partition.mapped_address)
+    padded_payload = cipher.pad(payload)
+    return cipher.decrypt(padded_payload, partition.mapped_address)
 
 
 def __carve_and_write_rbl_containers(dumpfile: str, layout: flash.FlashLayout, output_directory: str, extract: bool = False, with_rbl: bool = False) -> List[rbl.Container]:
