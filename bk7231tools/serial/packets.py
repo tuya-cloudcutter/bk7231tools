@@ -1,8 +1,14 @@
 # Copyright (c) Kuba Szczodrzyński 2022-06-21.
 
 from dataclasses import astuple, dataclass
+from enum import IntEnum
 from struct import calcsize, pack, unpack
 from typing import Dict, Type
+
+
+class EraseSize(IntEnum):
+    SECTOR_4K = 0x20
+    BLOCK_64K = 0xD8
 
 
 class Packet:
@@ -97,6 +103,7 @@ class BkFlashWriteCmnd(Packet):
     CODE = 0x06  # CMD_FlashWrite
     FORMAT = "<I$"
     IS_LONG = True
+    HAS_RESP_OTHER = True
     HAS_RESP_SAME = slice(1, 5)
     start: int
     data: bytes
@@ -108,7 +115,7 @@ class BkFlashWriteResp(Packet):
     FORMAT = "<BIB"
     status: int
     start: int
-    status2: int
+    written: int
 
 
 @dataclass
@@ -147,6 +154,21 @@ class BkFlashRead4KResp(Packet):
     status: int
     start: int
     data: bytes
+
+
+@dataclass
+class BkFlashEraseBlockCmnd(Packet):
+    CODE = 0x0F  # CMD_FlashErase
+    FORMAT = "<BI"
+    IS_LONG = True
+    HAS_RESP_SAME = slice(1, 6)
+    erase_size: EraseSize
+    start: int
+
+    @classmethod
+    def deserialize(cls, data: bytes) -> "Packet":
+        packet: "BkFlashEraseBlockCmnd" = super().deserialize(data)
+        packet.erase_size = EraseSize(packet.erase_size)
 
 
 RESPONSE_TABLE: Dict[Type[Packet], Type[Packet]] = {

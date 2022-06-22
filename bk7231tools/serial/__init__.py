@@ -1,7 +1,7 @@
 from binascii import crc32
 from io import BytesIO
 from time import sleep
-from typing import Generator
+from typing import IO, Generator
 
 from serial import Serial, Timeout
 
@@ -10,14 +10,25 @@ from .packets import (
     BkBootVersionResp,
     BkCheckCrcCmnd,
     BkCheckCrcResp,
+    BkFlashEraseBlockCmnd,
     BkFlashRead4KCmnd,
     BkFlashRead4KResp,
+    BkFlashWrite4KCmnd,
+    BkFlashWriteCmnd,
+    BkFlashWriteResp,
     BkLinkCheckCmnd,
     BkLinkCheckResp,
     BkRebootCmnd,
     BkSetBaudRateCmnd,
+    EraseSize,
 )
 from .protocol import BK7231Protocol
+
+
+def fix_addr(addr: int) -> int:
+    addr &= 0x1FFFFF
+    addr |= 0x200000
+    return addr
 
 
 class BK7231Serial(BK7231Protocol):
@@ -90,15 +101,21 @@ class BK7231Serial(BK7231Protocol):
         return response.version.decode("utf-8")
 
     def read_flash_range_crc(self, start: int, end: int) -> int:
-        start &= 0x1FFFFF
-        end &= 0x1FFFFF
-        start |= 0x200000
-        end |= 0x200000
+        start = fix_addr(start)
+        end = fix_addr(end)
         if end <= start:
             end += 0x200000
         command = BkCheckCrcCmnd(start, end)
         response: BkCheckCrcResp = self.command(command)
         return response.crc32 ^ 0xFFFFFFFF
+
+    def check_crc(self, start: int, data: bytes):
+        chip = self.read_flash_range_crc(start, start + len(data))
+        calc = crc32(data)
+        if chip != calc:
+            raise ValueError(
+                f"Chip CRC value {chip:X} does not match calculated CRC value {calc:X}"
+            )
 
     def read_flash_4k(
         self,
@@ -117,8 +134,7 @@ class BK7231Serial(BK7231Protocol):
         length: int,
         crc_check: bool = True,
     ) -> Generator[bytes, None, None]:
-        start &= 0x1FFFFF
-        start |= 0x200000
+        start = fix_addr(start)
         if start & 0xFFF:
             raise ValueError(f"Starting address 0x{start:X} is not 4K aligned")
         if length & 0xFFF:
@@ -132,13 +148,152 @@ class BK7231Serial(BK7231Protocol):
             command = BkFlashRead4KCmnd(addr)
             response: BkFlashRead4KResp = self.command(command)
             if crc_check:
-                crc_expected = self.read_flash_range_crc(addr, addr + 4096)
-                crc_found = crc32(response.data)
-                if crc_expected != crc_found:
-                    raise ValueError(
-                        f"Expected CRC value {crc_expected:X} does not match calculated CRC value {crc_found:X}"
-                    )
+                self.check_crc(addr, response.data)
             yield response.data
+
+    def erase_flash_block(
+        self,
+        start: int,
+        size: EraseSize,
+        dry_run: bool = False,
+    ) -> bool:
+        start = fix_addr(start)
+        if dry_run:
+            print(f" -> would erase {size.name} at 0x{start:X}")
+            return True
+        command = BkFlashEraseBlockCmnd(size, start)
+        self.command(command)
+        return True
+
+    def write_flash_bytes(
+        self,
+        start: int,
+        data: bytes,
+        crc_check: bool = False,
+        dry_run: bool = False,
+    ) -> bool:
+        start = fix_addr(start)
+        if len(data) > 256:
+            raise ValueError(f"Data too long ({len(data)} > 256)")
+        if dry_run:
+            print(f" -> would write {len(data)} bytes to 0x{start:X}")
+            return True
+        command = BkFlashWriteCmnd(start, data)
+        response: BkFlashWriteResp = self.command(command)
+        if response.written != len(data):
+            raise ValueError(f"Writing failed; wrote only {response.written} bytes")
+        if crc_check:
+            self.check_crc(start, data)
+        return True
+
+    def write_flash_4k(
+        self,
+        start: int,
+        data: bytes,
+        crc_check: bool = False,
+        dry_run: bool = False,
+    ) -> bool:
+        start = fix_addr(start)
+        if len(data) > 4096:
+            raise ValueError(f"Data too long ({len(data)} > 4096)")
+        if len(data) < 4096:
+            data += (4096 - len(data)) * b"\xff"
+        if dry_run:
+            print(f" -> would write {len(data)} bytes to 0x{start:X}")
+            return True
+        command = BkFlashWrite4KCmnd(start, data)
+        self.command(command)
+        if crc_check:
+            self.check_crc(start, data)
+        return True
+
+    def program_flash(
+        self,
+        io: IO[bytes],
+        io_size: int,
+        start: int,
+        verbose: bool = True,
+        crc_check: bool = False,
+        really_erase: bool = False,
+        dry_run: bool = False,
+    ) -> bool:
+        start = fix_addr(start)
+        end = start + io_size
+        addr = start
+        if start & 0xFFF and not really_erase:
+            raise ValueError(f"Start address not on 4K boundary; sector erase needed")
+
+        # start is NOT on sector boundary
+        if addr & 0xFFF:
+            print("Writing unaligned data...")
+            # erase sector containing data start
+            sector_addr = addr & 0x1FF000
+            self.erase_flash_block(
+                sector_addr,
+                EraseSize.SECTOR_4K,
+                dry_run=dry_run,
+            )
+
+            # write data in 256-byte chunks
+            sector_end = (addr & 0x1FF000) + 4096
+            while addr & 0xFFF:
+                block = io.read(min(256, sector_end - addr))
+                block_size = len(block)
+                if not block_size:
+                    # writing finished
+                    return True
+                self.write_flash_bytes(
+                    addr,
+                    block,
+                    dry_run=dry_run,
+                )
+                addr += block_size
+
+        assert (addr & 0xFFF) == 0
+
+        # write the rest of data in 4K sectors
+        crc = 0
+        while True:
+            block = io.read(4096)
+            block_size = len(block)
+            block_empty = not len(block.strip(b"\xff"))
+            if not block_size:
+                if crc_check:
+                    print(f"Verifying CRC")
+                    pad_size = 4096 - (io_size % 4096)
+                    crc = crc32(b"\xff" * pad_size, crc)
+                    crc_chip = self.read_flash_range_crc(
+                        start=start,
+                        end=start + io_size + pad_size,
+                    )
+                    if crc != crc_chip:
+                        raise ValueError(
+                            f"Chip CRC value {crc_chip:X} does not match calculated CRC value {crc:X}"
+                        )
+                print("OK!")
+                return True
+            # print progress info
+            if verbose:
+                progress = 100.0 - (end - addr) / io_size * 100.0
+                if block_empty:
+                    print(f"Erasing at 0x{addr:X} ({progress:.2f}%)")
+                else:
+                    print(f"Erasing and writing at 0x{addr:X} ({progress:.2f}%)")
+            # compute CRC32
+            crc = crc32(block, crc)
+            self.erase_flash_block(
+                addr,
+                EraseSize.SECTOR_4K,
+                dry_run=dry_run,
+            )
+            if not block_empty:
+                # skip empty blocks
+                self.write_flash_4k(
+                    addr,
+                    block,
+                    dry_run=dry_run,
+                )
+            addr += block_size
 
 
 __all__ = ["BK7231Serial"]
