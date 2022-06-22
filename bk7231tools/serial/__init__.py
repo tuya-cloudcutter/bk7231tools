@@ -1,216 +1,144 @@
-import struct
-import time
-from typing import Tuple
-import zlib
+from binascii import crc32
+from io import BytesIO
+from time import sleep
+from typing import Generator
 
-import serial
-from serial.serialutil import Timeout
+from serial import Serial, Timeout
 
-from .commands import *
+from .packets import (
+    BkBootVersionCmnd,
+    BkBootVersionResp,
+    BkCheckCrcCmnd,
+    BkCheckCrcResp,
+    BkFlashRead4KCmnd,
+    BkFlashRead4KResp,
+    BkLinkCheckCmnd,
+    BkLinkCheckResp,
+    BkRebootCmnd,
+    BkSetBaudRateCmnd,
+)
+from .protocol import BK7231Protocol
 
 
-class BK7231Serial(object):
-    COMMON_COMMAND_PREAMBLE = b"\x01\xe0\xfc"
-    LONG_COMMAND_MARKER = b"\xff\xf4"
-
-    RESPONSE_PREAMBLE = b"\x04\x0e"
-    RESPONSE_DATA_MARKER = COMMON_COMMAND_PREAMBLE
-    LONG_RESPONSE_MARKER = b"\xf4"
-
-    MAX_FAIL_COUNT = 100
-
-    def __init__(self, device, baudrate, timeout=10.0):
-        initial_baudrate = 115200
-        self.device = device
-        self.baudrate = baudrate
-        self.timeout = timeout
-        self.serial = serial.Serial(
-            port=self.device, baudrate=initial_baudrate, timeout=timeout
+class BK7231Serial(BK7231Protocol):
+    def __init__(
+        self,
+        port: str,
+        baudrate: str,
+        link_timeout: float = 10.0,
+        cmnd_timeout: float = 1.0,
+        debug_hl: bool = False,
+        debug_ll: bool = False,
+    ) -> None:
+        super().__init__(
+            serial=Serial(
+                port=port,
+                baudrate=115200,
+                timeout=cmnd_timeout,
+            ),
         )
-        if not self.__wait_for_link():
+        self.debug_hl = debug_hl
+        self.debug_ll = debug_ll
+        self.hw_reset()
+        if not self.wait_for_link(link_timeout):
             raise TimeoutError("Timed out attempting to link with chip")
-        if self.baudrate != initial_baudrate:
-            self.set_baudrate(self.baudrate)
-        self.chip_info = self.read_chip_info()
-        print(f"Connected! Chip info: {self.chip_info}")
+        if self.serial.baudrate != baudrate:
+            self.set_baudrate(baudrate)
+        print(f"Connected! Chip info: {self.read_chip_info()}")
 
     def close(self):
         if self.serial and not self.serial.closed:
             self.serial.close()
+            self.serial = None
 
-    def read_flash_range_crc(self, start_address, end_address):
-        command_type = COMMAND_FLASHCRC
-        payload = struct.pack("<II", start_address, end_address)
-        payload = self.__build_payload(command_type.code, payload_body=payload)
-        _, response_payload = self.__send_and_parse_response(payload=payload, request_type=command_type)
-        return struct.unpack("<I", response_payload)[0]
+    def wait_for_link(self, timeout: float) -> bool:
+        tm = Timeout(timeout)
+        tm_prev = self.serial.timeout
+        self.serial.timeout = 0.005
 
-    def reboot_chip(self):
-        command_type = COMMAND_REBOOT
-        payload = self.__build_payload(command_type.code, payload_body=b"\xA5")
-        self.serial.write(payload)
-        self.serial.flush()
-
-    def set_baudrate(self, rate):
-        delay = 20
-        command_type = COMMAND_SETBAUDRATE
-        payload = struct.pack("<IB", rate, delay)
-        payload = self.__build_payload(command_type.code, payload)
-        self.__send_payload(payload)
-        time.sleep(delay/1000/2)
-        self.serial.baudrate = rate
-        response_type, _ = self.__read_response(command_type)
-        return response_type == command_type.code
-
-    def read_chip_info(self):
-        command_type = COMMAND_READCHIPINFO
-        payload = self.__build_payload(command_type.code)
-        response_type, response_payload = self.__send_and_parse_response(payload=payload, request_type=command_type)
-        if response_type == command_type.code:
-            return response_payload.decode("utf8")
-        else:
-            raise ValueError("Invalid chip_info response")
-
-    def read_flash_4k(self, start_addr: int, segment_count: int = 1, crc_check: bool = True):
-        if (start_addr & 0xFFF) != 0:
-            raise ValueError(f"Starting address {start_addr:#x} is not 4K aligned")
-        if start_addr < 0x10000:
-            raise ValueError(f"Starting address {start_addr:#x} is smaller than 0x10000")
-
-        flash_data = bytearray()
-        end_addr = start_addr + segment_count * 0x1000
-        cur_addr = start_addr
-        fail_count = 0
-
-        while cur_addr < end_addr:
+        command = BkLinkCheckCmnd()
+        response = None
+        while not tm.expired() and not response:
             try:
-                print(f"Reading 4k page at {cur_addr:#X} ({(((cur_addr - start_addr) / (end_addr - start_addr)) * 100):.2f}%)")
-                block = self.__read_flash_4k_operation(cur_addr)
-                crc = self.read_flash_range_crc(cur_addr, cur_addr+0x1000)
-                actual_crc = zlib.crc32(block) ^ 0xFFFFFFFF
-                if (crc == actual_crc) and crc_check or not crc_check:
-                    flash_data += block
-                    cur_addr += 0x1000
-                else:
-                    raise ValueError(f"Expected CRC value {crc:#x} does not match calculated CRC value {actual_crc:#x}")
-
-            except ValueError as e:
-                fail_count += 1
-                if fail_count > self.MAX_FAIL_COUNT:
-                    raise e
-
-        return flash_data
-
-    def __wait_for_link(self, link_wait_timeout=0.01):
-        timeout = Timeout(self.timeout)
-        self.serial.timeout = link_wait_timeout
-        while not timeout.expired():
-            try:
-                command_type = COMMAND_LINKCHECK
-                payload = self.__build_payload(command_type.code)
-                response_code, response_payload = self.__send_and_parse_response(payload=payload, request_type=command_type)
-                if response_code == command_type.response_code and response_payload == b"\x00":
-                    self.__drain()
-                    self.serial.timeout = self.timeout
-                    return True
+                response: BkLinkCheckResp = self.command(command)
+                if response and response.value != 0:
+                    response = None
             except ValueError:
                 pass
-        return False
 
-    def __read_flash_4k_operation(self, start_addr):
-        command_type = COMMAND_READFLASH4K
-        payload = struct.pack("<I", start_addr)
-        payload = self.__build_payload(command_type.code, payload, long_command=True)
+        self.drain()
+        self.serial.timeout = tm_prev
+        return not not response
 
-        _, response_payload = self.__send_and_parse_response(payload=payload, request_type=command_type)
-        
-        if len(response_payload) != (4 * 1024) + 4:
-            raise SystemError(f"Expected length {(4 * 1024) + 4}, but got {len(response_payload)}")
+    def set_baudrate(self, baudrate: int) -> bool:
+        command = BkSetBaudRateCmnd(baudrate, delay_ms=20)
 
-        address = struct.unpack("<I", response_payload[:4])[0]
-        if address != start_addr:
-            raise SystemError(f"Invalid read. Requested address {start_addr:#x} does not match returned address {address:#x}")
+        def baudrate_cb():
+            sleep(command.delay_ms / 1000 / 2)
+            self.serial.baudrate = baudrate
 
-        return response_payload[4:]
+        self.command(command, after_send=baudrate_cb)
+        return True
 
-    def __send_payload(self, payload):
-        self.serial.write(payload)
-        self.serial.flush()
+    def reboot_chip(self):
+        command = BkRebootCmnd()
+        self.command(command)
 
-    def __read_response(self, request_type: CommandType):
-        response_length = 0
-        read_response_type = None
+    def read_chip_info(self) -> str:
+        command = BkBootVersionCmnd()
+        response: BkBootVersionResp = self.command(command)
+        return response.version.decode("utf-8")
 
-        while read_response_type != request_type.code:
-            try:
-                data = self.serial.read_until(self.RESPONSE_PREAMBLE)
-                if len(data) == 0 or data[-len(self.RESPONSE_PREAMBLE):] != self.RESPONSE_PREAMBLE:
-                    raise ValueError("No response received")
+    def read_flash_range_crc(self, start: int, end: int) -> int:
+        start &= 0x1FFFFF
+        end &= 0x1FFFFF
+        start |= 0x200000
+        end |= 0x200000
+        if end <= start:
+            end += 0x200000
+        command = BkCheckCrcCmnd(start, end)
+        response: BkCheckCrcResp = self.command(command)
+        return response.crc32 ^ 0xFFFFFFFF
 
-                response_length = struct.unpack("B", self.serial.read(1))[0]
-                is_long_command = response_length == 0xFF
-                if request_type.is_long != is_long_command:
-                    # Invalid response, so continue reading until a new valid packet is found
-                    continue
+    def read_flash_4k(
+        self,
+        start: int,
+        count: int = 1,
+        crc_check: bool = True,
+    ) -> bytes:
+        out = BytesIO()
+        for data in self.read_flash(start, count * 4096, crc_check):
+            out.write(data)
+        return out.getvalue()
 
-                response_data_marker = self.serial.read(len(self.RESPONSE_DATA_MARKER))
-                if response_data_marker != self.RESPONSE_DATA_MARKER:
-                    # Invalid packet, so continue reading until a new valid packet is found
-                    continue
+    def read_flash(
+        self,
+        start: int,
+        length: int,
+        crc_check: bool = True,
+    ) -> Generator[bytes, None, None]:
+        start &= 0x1FFFFF
+        start |= 0x200000
+        if start & 0xFFF:
+            raise ValueError(f"Starting address 0x{start:X} is not 4K aligned")
+        if length & 0xFFF:
+            raise ValueError(f"Read length 0x{length:X} is not 4K aligned")
+        length = int(length // 4096)
 
-                if is_long_command:
-                    long_response_marker = self.serial.read(1)
-
-                    if long_response_marker != self.LONG_RESPONSE_MARKER:
-                        # Invalid packet, so continue reading until a new valid packet is found
-                        continue
-
-                    response_length, read_response_type = struct.unpack(
-                        "<HH", self.serial.read(4)
+        for i in range(length):
+            addr = start + i * 4096
+            progress = i / length * 100.0
+            print(f"Reading 4k page at 0x{addr:06X} ({progress:.2f}%)")
+            command = BkFlashRead4KCmnd(addr)
+            response: BkFlashRead4KResp = self.command(command)
+            if crc_check:
+                crc_expected = self.read_flash_range_crc(addr, addr + 4096)
+                crc_found = crc32(response.data)
+                if crc_expected != crc_found:
+                    raise ValueError(
+                        f"Expected CRC value {crc_expected:X} does not match calculated CRC value {crc_found:X}"
                     )
-                    response_length -= 2
-                else:
-                    read_response_type = struct.unpack("B", self.serial.read(1))[0]
-                    response_length -= 4
-
-                # Special case if the request type has a special response code - if so
-                # break out
-                if (request_type.has_response_code and
-                        read_response_type == request_type.response_code):
-                    break
-
-            except struct.error:
-                pass
-
-        response_payload = self.serial.read(response_length)
-        return read_response_type, response_payload
-
-    def __send_and_parse_response(self, payload, request_type: CommandType) -> Tuple[int, bytes]:
-        self.__send_payload(payload)
-        return self.__read_response(request_type)
-
-    def __drain(self):
-        self.serial.timeout = 0.001
-        while self.serial.read(1 * 1024) != b"":
-            pass
-        self.serial.timeout = self.timeout
-
-    def __build_payload_preamble(self, payload_type, payload_length=0, long_command=False):
-        payload = self.COMMON_COMMAND_PREAMBLE
-        payload_length += 1
-        if payload_length >= 0xFF or long_command:
-            payload += self.LONG_COMMAND_MARKER
-            payload += struct.pack("<H", payload_length)
-        else:
-            payload += struct.pack("B", payload_length)
-        payload += struct.pack("B", payload_type)
-        return payload
-
-    def __build_payload(self, payload_type, payload_body=None, long_command=False):
-        if payload_body is None:
-            payload_body = b''
-        preamble = self.__build_payload_preamble(payload_type, len(payload_body), long_command=long_command)
-        return preamble + payload_body
+            yield response.data
 
 
-__all__ = ['BK7231Serial']
+__all__ = ["BK7231Serial"]
