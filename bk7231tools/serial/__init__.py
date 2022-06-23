@@ -225,7 +225,8 @@ class BK7231Serial(BK7231Protocol):
 
         # start is NOT on sector boundary
         if addr & 0xFFF:
-            print("Writing unaligned data...")
+            if verbose:
+                print("Writing unaligned data...")
             # erase sector containing data start
             sector_addr = addr & 0x1FF000
             self.erase_flash_block(
@@ -259,7 +260,8 @@ class BK7231Serial(BK7231Protocol):
             block_empty = not len(block.strip(b"\xff"))
             if not block_size:
                 if crc_check:
-                    print(f"Verifying CRC")
+                    if verbose:
+                        print("Verifying CRC")
                     pad_size = 4096 - (io_size % 4096)
                     crc = crc32(b"\xff" * pad_size, crc)
                     crc_chip = self.read_flash_range_crc(
@@ -270,7 +272,8 @@ class BK7231Serial(BK7231Protocol):
                         raise ValueError(
                             f"Chip CRC value {crc_chip:X} does not match calculated CRC value {crc:X}"
                         )
-                print("OK!")
+                if verbose:
+                    print("OK!")
                 return True
             # print progress info
             if verbose:
