@@ -1,5 +1,6 @@
 from binascii import crc32
 from io import BytesIO
+from math import ceil
 from time import sleep
 from typing import IO, Generator
 
@@ -32,10 +33,12 @@ def fix_addr(addr: int) -> int:
 
 
 class BK7231Serial(BK7231Protocol):
+    chip_info: bytes
+    crc_end_incl: bool = False
     def __init__(
         self,
         port: str,
-        baudrate: str,
+        baudrate: int = 115200,
         link_timeout: float = 10.0,
         cmnd_timeout: float = 1.0,
         debug_hl: bool = False,
@@ -50,12 +53,25 @@ class BK7231Serial(BK7231Protocol):
         )
         self.debug_hl = debug_hl
         self.debug_ll = debug_ll
+        # reset the chip using RTS line
         self.hw_reset()
+        # try to communicate
         if not self.wait_for_link(link_timeout):
             raise TimeoutError("Timed out attempting to link with chip")
+        # update the transmission baudrate
         if self.serial.baudrate != baudrate:
             self.set_baudrate(baudrate)
-        print(f"Connected! Chip info: {self.read_chip_info()}")
+        # read and save chip info
+        self.read_chip_info()
+        # apply workarounds for BK7231N
+        if self.chip_info == b"\x07":
+            print(f"Connected to BK7231N chip")
+            self.crc_end_incl = True
+            self.crc_speed_bps = 400000
+        elif self.chip_info:
+            print(f"Connected! Chip info: {self.chip_info}")
+        else:
+            print(f"Connected, but read no chip version")
 
     def close(self):
         if self.serial and not self.serial.closed:
@@ -85,6 +101,8 @@ class BK7231Serial(BK7231Protocol):
         command = BkSetBaudRateCmnd(baudrate, delay_ms=20)
 
         def baudrate_cb():
+            if self.debug_hl:
+                print("-- UART: Changing port baudrate")
             sleep(command.delay_ms / 1000 / 2)
             self.serial.baudrate = baudrate
 
@@ -98,13 +116,21 @@ class BK7231Serial(BK7231Protocol):
     def read_chip_info(self) -> str:
         command = BkBootVersionCmnd()
         response: BkBootVersionResp = self.command(command)
-        return response.version.decode("utf-8")
+        self.chip_info = response.version
+        return self.chip_info.decode("utf-8")
 
     def read_flash_range_crc(self, start: int, end: int) -> int:
         start = fix_addr(start)
         end = fix_addr(end)
-        if end <= start:
+        # probably reading whole flash CRC
+        if end == 0x200000:
             end += 0x200000
+        # command arguments are (incl., excl.)
+        if start == end:
+            raise ValueError("Start and end must differ! (end is exclusive)")
+        # fix for BK7231N which also counts the end offset
+        if self.crc_end_incl:
+            end -= 1
         command = BkCheckCrcCmnd(start, end)
         response: BkCheckCrcResp = self.command(command)
         return response.crc32 ^ 0xFFFFFFFF
