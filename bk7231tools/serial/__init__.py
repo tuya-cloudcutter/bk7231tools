@@ -19,6 +19,8 @@ from .packets import (
     BkFlashWriteResp,
     BkLinkCheckCmnd,
     BkLinkCheckResp,
+    BkReadRegCmnd,
+    BkReadRegResp,
     BkRebootCmnd,
     BkSetBaudRateCmnd,
     EraseSize,
@@ -33,9 +35,9 @@ def fix_addr(addr: int) -> int:
 
 
 class BK7231Serial(BK7231Protocol):
-    chip_info: bytes
+    chip_info: str
     crc_end_incl: bool = False
-    crc_speed_bps: int = 0
+    crc_speed_bps: int = 400000
 
     def __init__(
         self,
@@ -66,11 +68,10 @@ class BK7231Serial(BK7231Protocol):
         # read and save chip info
         self.read_chip_info()
         # apply workarounds for BK7231N
-        if self.chip_info == b"\x07":
-            print(f"Connected to BK7231N chip")
+        if self.chip_info == "0x7231c":
             self.crc_end_incl = True
-            self.crc_speed_bps = 400000
-        elif self.chip_info:
+        # print chip type
+        if self.chip_info:
             print(f"Connected! Chip info: {self.chip_info}")
         else:
             print(f"Connected, but read no chip version")
@@ -118,8 +119,17 @@ class BK7231Serial(BK7231Protocol):
     def read_chip_info(self) -> str:
         command = BkBootVersionCmnd()
         response: BkBootVersionResp = self.command(command)
-        self.chip_info = response.version
-        return self.chip_info.decode("utf-8")
+        if response.version == b"\x07":
+            # read chip type from register if command is not implemented
+            self.chip_info = hex(self.register_read(0x800000))  # SCTRL_CHIP_ID
+        else:
+            self.chip_info = response.version
+        return self.chip_info
+
+    def register_read(self, address: int) -> int:
+        command = BkReadRegCmnd(address)
+        response: BkReadRegResp = self.command(command)
+        return response.value
 
     def read_flash_range_crc(self, start: int, end: int) -> int:
         start = fix_addr(start)
