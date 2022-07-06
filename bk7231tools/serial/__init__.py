@@ -35,6 +35,8 @@ def fix_addr(addr: int) -> int:
 class BK7231Serial(BK7231Protocol):
     chip_info: bytes
     crc_end_incl: bool = False
+    crc_speed_bps: int = 0
+
     def __init__(
         self,
         port: str,
@@ -128,11 +130,26 @@ class BK7231Serial(BK7231Protocol):
         # command arguments are (incl., excl.)
         if start == end:
             raise ValueError("Start and end must differ! (end is exclusive)")
+        # print a warning instead of just timeout-ing
+        timeout_current = self.serial.timeout
+        timeout_minimum = (end - start) / self.crc_speed_bps
+        if timeout_minimum > timeout_current:
+            print(
+                "WARN: The current command timeout of",
+                timeout_current,
+                "second(s) is too low for reading",
+                end - start,
+                "bytes CRC. Increasing to",
+                ceil(timeout_minimum),
+                "second(s).",
+            )
+            self.serial.timeout = ceil(timeout_minimum)
         # fix for BK7231N which also counts the end offset
         if self.crc_end_incl:
             end -= 1
         command = BkCheckCrcCmnd(start, end)
         response: BkCheckCrcResp = self.command(command)
+        self.serial.timeout = timeout_current
         return response.crc32 ^ 0xFFFFFFFF
 
     def check_crc(self, start: int, data: bytes):
