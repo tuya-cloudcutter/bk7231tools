@@ -174,6 +174,25 @@ class BkFlashRead4KResp(Packet):
 
 
 @dataclass
+class BkFlashGetMIDCmnd(Packet):
+    CODE = 0x0E  # CMD_FlashGetMID
+    FORMAT = "<I"
+    IS_LONG = True
+    HAS_RESP_OTHER = True
+    address: int
+
+
+@dataclass
+class BkFlashGetMIDResp(Packet):
+    CODE = 0x0E  # CMD_FlashGetMID
+    FORMAT = "<H3B"
+    dummy: int
+    mfr_id: int
+    chip_id: int
+    size_code: int
+
+
+@dataclass
 class BkFlashEraseBlockCmnd(Packet):
     CODE = 0x0F  # CMD_FlashErase
     FORMAT = "<BI"
@@ -196,4 +215,5 @@ RESPONSE_TABLE: Dict[Type[Packet], Type[Packet]] = {
     BkFlashWriteCmnd: BkFlashWriteResp,
     BkFlashWrite4KCmnd: BkFlashWrite4KResp,
     BkFlashRead4KCmnd: BkFlashRead4KResp,
+    BkFlashGetMIDCmnd: BkFlashGetMIDResp,
 }
