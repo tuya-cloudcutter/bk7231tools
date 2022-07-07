@@ -174,22 +174,41 @@ class BkFlashRead4KResp(Packet):
 
 
 @dataclass
-class BkFlashGetMIDCmnd(Packet):
+class BkFlashReg8ReadCmnd(Packet):
+    CODE = 0x0C  # CMD_FlashReadSR
+    FORMAT = "B"
+    IS_LONG = True
+    HAS_RESP_OTHER = True
+    HAS_RESP_SAME = slice(1, 2)
+    cmd: int
+
+
+@dataclass
+class BkFlashReg8ReadResp(Packet):
+    CODE = 0x0C  # CMD_FlashReadSR
+    FORMAT = "BBB"
+    status: int
+    cmd: int
+    data0: int
+
+
+@dataclass
+class BkFlashReg24ReadCmnd(Packet):
     CODE = 0x0E  # CMD_FlashGetMID
     FORMAT = "<I"
     IS_LONG = True
     HAS_RESP_OTHER = True
-    address: int
+    cmd: int
 
 
 @dataclass
-class BkFlashGetMIDResp(Packet):
+class BkFlashReg24ReadResp(Packet):
     CODE = 0x0E  # CMD_FlashGetMID
-    FORMAT = "<H3B"
-    dummy: int
-    mfr_id: int
-    chip_id: int
-    size_code: int
+    FORMAT = "<BxBBB"
+    status: int
+    data0: int
+    data1: int
+    data2: int
 
 
 @dataclass
@@ -215,5 +234,6 @@ RESPONSE_TABLE: Dict[Type[Packet], Type[Packet]] = {
     BkFlashWriteCmnd: BkFlashWriteResp,
     BkFlashWrite4KCmnd: BkFlashWrite4KResp,
     BkFlashRead4KCmnd: BkFlashRead4KResp,
-    BkFlashGetMIDCmnd: BkFlashGetMIDResp,
+    BkFlashReg8ReadCmnd: BkFlashReg8ReadResp,
+    BkFlashReg24ReadCmnd: BkFlashReg24ReadResp,
 }

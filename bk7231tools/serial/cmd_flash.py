@@ -6,10 +6,12 @@ from typing import Generator
 from .cmd_chip import BK7231CmdChip
 from .packets import (
     BkFlashEraseBlockCmnd,
-    BkFlashGetMIDCmnd,
-    BkFlashGetMIDResp,
     BkFlashRead4KCmnd,
     BkFlashRead4KResp,
+    BkFlashReg8ReadCmnd,
+    BkFlashReg8ReadResp,
+    BkFlashReg24ReadCmnd,
+    BkFlashReg24ReadResp,
     BkFlashWrite4KCmnd,
     BkFlashWriteCmnd,
     BkFlashWriteResp,
@@ -19,7 +21,7 @@ from .utils import fix_addr
 
 
 class BK7231CmdFlash(BK7231CmdChip):
-    def write_flash_bytes(
+    def flash_write_bytes(
         self,
         start: int,
         data: bytes,
@@ -40,7 +42,7 @@ class BK7231CmdFlash(BK7231CmdChip):
             self.check_crc(start, data)
         return True
 
-    def write_flash_4k(
+    def flash_write_4k(
         self,
         start: int,
         data: bytes,
@@ -68,11 +70,11 @@ class BK7231CmdFlash(BK7231CmdChip):
         crc_check: bool = True,
     ) -> bytes:
         out = BytesIO()
-        for data in self.read_flash(start, count * 4096, crc_check):
+        for data in self.flash_read(start, count * 4096, crc_check):
             out.write(data)
         return out.getvalue()
 
-    def read_flash(
+    def flash_read(
         self,
         start: int,
         length: int,
@@ -95,18 +97,27 @@ class BK7231CmdFlash(BK7231CmdChip):
                 self.check_crc(addr, response.data)
             yield response.data
 
-    def get_flash_id(self, address: int = 0x9F) -> dict:
-        command = BkFlashGetMIDCmnd(address)
-        response: BkFlashGetMIDResp = self.command(command)
+    def flash_read_reg8(self, cmd: int) -> int:
+        command = BkFlashReg8ReadCmnd(cmd)
+        response: BkFlashReg8ReadResp = self.command(command)
+        return response.data0
+
+    def flash_read_reg24(self, cmd: int) -> int:
+        command = BkFlashReg24ReadCmnd(cmd)
+        response: BkFlashReg24ReadResp = self.command(command)
+        return (response.data0, response.data1, response.data2)
+
+    def flash_read_id(self, cmd: int = 0x9F) -> dict:
+        rdid = self.flash_read_reg24(cmd)
         return dict(
-            id=bytes([response.mfr_id, response.chip_id, response.size_code]),
-            manufacturer_id=response.mfr_id,
-            chip_id=response.chip_id,
-            size_code=response.size_code,
-            size=(1 << response.size_code),
+            id=bytes(rdid),
+            manufacturer_id=rdid[0],
+            chip_id=rdid[1],
+            size_code=rdid[2],
+            size=(1 << rdid[2]),
         )
 
-    def erase_flash_block(
+    def flash_erase_block(
         self,
         start: int,
         size: EraseSize,

@@ -206,7 +206,7 @@ def chip_info(device: BK7231Serial, args: List[str]):
 
 def read_flash(device: BK7231Serial, args: List[str]):
     with open(args.file, "wb") as fs:
-        for data in device.read_flash(args.start_address, args.count * 4096, not args.no_verify_checksum):
+        for data in device.flash_read(args.start_address, args.count * 4096, not args.no_verify_checksum):
             fs.write(data)
 
 

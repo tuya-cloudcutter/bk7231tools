@@ -23,6 +23,10 @@ from .utils import fix_addr
 
 
 class BK7231CmdChip(BK7231Protocol):
+    crc_end_incl: bool = False
+    crc_speed_bps: int = 400000
+    chip_info: str
+
     def wait_for_link(self, timeout: float) -> bool:
         tm = Timeout(timeout)
         tm_prev = self.serial.timeout

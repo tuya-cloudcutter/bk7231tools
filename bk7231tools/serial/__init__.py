@@ -9,10 +9,6 @@ from .utils import fix_addr
 
 
 class BK7231Serial(BK7231CmdFlash):
-    chip_info: str
-    crc_end_incl: bool = False
-    crc_speed_bps: int = 400000
-
     def __init__(
         self,
         port: str,
@@ -77,7 +73,7 @@ class BK7231Serial(BK7231CmdFlash):
                 print("Writing unaligned data...")
             # erase sector containing data start
             sector_addr = addr & 0x1FF000
-            self.erase_flash_block(
+            self.flash_erase_block(
                 sector_addr,
                 EraseSize.SECTOR_4K,
                 dry_run=dry_run,
@@ -91,7 +87,7 @@ class BK7231Serial(BK7231CmdFlash):
                 if not block_size:
                     # writing finished
                     return True
-                self.write_flash_bytes(
+                self.flash_write_bytes(
                     addr,
                     block,
                     dry_run=dry_run,
@@ -132,14 +128,14 @@ class BK7231Serial(BK7231CmdFlash):
                     print(f"Erasing and writing at 0x{addr:X} ({progress:.2f}%)")
             # compute CRC32
             crc = crc32(block, crc)
-            self.erase_flash_block(
+            self.flash_erase_block(
                 addr,
                 EraseSize.SECTOR_4K,
                 dry_run=dry_run,
             )
             if not block_empty:
                 # skip empty blocks
-                self.write_flash_4k(
+                self.flash_write_4k(
                     addr,
                     block,
                     dry_run=dry_run,
