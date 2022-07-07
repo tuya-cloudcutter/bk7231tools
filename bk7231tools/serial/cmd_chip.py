@@ -59,7 +59,7 @@ class BK7231CmdChip(BK7231Protocol):
         return True
 
     def reboot_chip(self):
-        command = BkRebootCmnd()
+        command = BkRebootCmnd(0xA5)
         self.command(command)
 
     def read_chip_info(self) -> str:

@@ -73,7 +73,7 @@ class BkReadRegResp(Packet):
 class BkRebootCmnd(Packet):
     CODE = 0x0E  # CMD_Reboot
     FORMAT = "B"
-    value = "\xA5"
+    value: int
 
 
 @dataclass
