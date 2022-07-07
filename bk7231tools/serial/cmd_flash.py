@@ -10,6 +10,10 @@ from .packets import (
     BkFlashRead4KResp,
     BkFlashReg8ReadCmnd,
     BkFlashReg8ReadResp,
+    BkFlashReg8WriteCmnd,
+    BkFlashReg8WriteResp,
+    BkFlashReg16WriteCmnd,
+    BkFlashReg16WriteResp,
     BkFlashReg24ReadCmnd,
     BkFlashReg24ReadResp,
     BkFlashWrite4KCmnd,
@@ -102,10 +106,33 @@ class BK7231CmdFlash(BK7231CmdChip):
         response: BkFlashReg8ReadResp = self.command(command)
         return response.data0
 
+    def flash_write_reg8(self, cmd: int, data: int) -> bool:
+        command = BkFlashReg8WriteCmnd(cmd, data)
+        response: BkFlashReg8WriteResp = self.command(command)
+        return response.data == command.data
+
+    def flash_write_reg16(self, cmd: int, data: int) -> bool:
+        command = BkFlashReg16WriteCmnd(cmd, data)
+        response: BkFlashReg16WriteResp = self.command(command)
+        return response.data == command.data
+
     def flash_read_reg24(self, cmd: int) -> int:
         command = BkFlashReg24ReadCmnd(cmd)
         response: BkFlashReg24ReadResp = self.command(command)
         return (response.data0, response.data1, response.data2)
+
+    def flash_read_sr(self, size: int = 1) -> int:
+        sr = self.flash_read_reg8(0x05)
+        if size == 2:
+            sr |= self.flash_read_reg8(0x35) << 8
+        return sr
+
+    def flash_write_sr(self, sr: int, size: int = 1) -> True:
+        if size == 1:
+            self.flash_write_reg8(0x01, sr)
+        else:
+            self.flash_write_reg16(0x01, sr)
+        return sr == self.flash_read_sr(size)
 
     def flash_read_id(self, cmd: int = 0x9F) -> dict:
         rdid = self.flash_read_reg24(cmd)
@@ -116,6 +143,11 @@ class BK7231CmdFlash(BK7231CmdChip):
             size_code=rdid[2],
             size=(1 << rdid[2]),
         )
+
+    def flash_unprotect(self, mask: int = 0b01111100) -> bool:
+        sr = self.flash_read_sr()
+        sr &= ~mask
+        return self.flash_write_sr(sr)
 
     def flash_erase_block(
         self,

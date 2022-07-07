@@ -193,6 +193,46 @@ class BkFlashReg8ReadResp(Packet):
 
 
 @dataclass
+class BkFlashReg8WriteCmnd(Packet):
+    CODE = 0x0D  # CMD_FlashWriteSR
+    FORMAT = "BB"
+    IS_LONG = True
+    HAS_RESP_OTHER = True
+    HAS_RESP_SAME = slice(1, 3)
+    cmd: int
+    data: int
+
+
+@dataclass
+class BkFlashReg8WriteResp(Packet):
+    CODE = 0x0D  # CMD_FlashWriteSR
+    FORMAT = "BBB"
+    status: int
+    cmd: int
+    data: int
+
+
+@dataclass
+class BkFlashReg16WriteCmnd(Packet):
+    CODE = 0x0D  # CMD_FlashWriteSR
+    FORMAT = "<BH"
+    IS_LONG = True
+    HAS_RESP_OTHER = True
+    HAS_RESP_SAME = slice(1, 4)
+    cmd: int
+    data: int
+
+
+@dataclass
+class BkFlashReg16WriteResp(Packet):
+    CODE = 0x0D  # CMD_FlashWriteSR
+    FORMAT = "<BBH"
+    status: int
+    cmd: int
+    data: int
+
+
+@dataclass
 class BkFlashReg24ReadCmnd(Packet):
     CODE = 0x0E  # CMD_FlashGetMID
     FORMAT = "<I"
@@ -227,13 +267,17 @@ class BkFlashEraseBlockCmnd(Packet):
 
 
 RESPONSE_TABLE: Dict[Type[Packet], Type[Packet]] = {
-    BkLinkCheckCmnd: BkLinkCheckResp,
-    BkReadRegCmnd: BkReadRegResp,
-    BkCheckCrcCmnd: BkCheckCrcResp,
-    BkBootVersionCmnd: BkBootVersionResp,
-    BkFlashWriteCmnd: BkFlashWriteResp,
-    BkFlashWrite4KCmnd: BkFlashWrite4KResp,
-    BkFlashRead4KCmnd: BkFlashRead4KResp,
-    BkFlashReg8ReadCmnd: BkFlashReg8ReadResp,
-    BkFlashReg24ReadCmnd: BkFlashReg24ReadResp,
+    # short commands
+    BkLinkCheckCmnd: BkLinkCheckResp,  # 0x00 / CMD_LinkCheck
+    BkReadRegCmnd: BkReadRegResp,  # 0x03 / CMD_ReadReg
+    BkCheckCrcCmnd: BkCheckCrcResp,  # 0x10 / CMD_CheckCRC
+    BkBootVersionCmnd: BkBootVersionResp,  # 0x11 / CMD_ReadBootVersion
+    # long commands
+    BkFlashWriteCmnd: BkFlashWriteResp,  # 0x06 / CMD_FlashWrite
+    BkFlashWrite4KCmnd: BkFlashWrite4KResp,  # 0x07 / CMD_FlashWrite4K
+    BkFlashRead4KCmnd: BkFlashRead4KResp,  # 0x09 / CMD_FlashRead4K
+    BkFlashReg8ReadCmnd: BkFlashReg8ReadResp,  # 0x0c / CMD_FlashReadSR
+    BkFlashReg8WriteCmnd: BkFlashReg8WriteResp,  # 0x0d / CMD_FlashWriteSR
+    BkFlashReg16WriteCmnd: BkFlashReg16WriteResp,  # 0x0d / CMD_FlashWriteSR
+    BkFlashReg24ReadCmnd: BkFlashReg24ReadResp,  # 0x0e / CMD_FlashGetMID
 }

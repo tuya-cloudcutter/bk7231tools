@@ -67,6 +67,13 @@ class BK7231Serial(BK7231CmdFlash):
         if start & 0xFFF and not really_erase:
             raise ValueError(f"Start address not on 4K boundary; sector erase needed")
 
+        # unprotect flash memory for BK7231N
+        if self.chip_info == "0x7231c":
+            if verbose:
+                print("Trying to unprotect flash memory...")
+            if not self.flash_unprotect():
+                raise RuntimeError("Failed to unprotect")
+
         # start is NOT on sector boundary
         if addr & 0xFFF:
             if verbose:
