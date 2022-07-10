@@ -1,216 +1,153 @@
-import struct
-import time
-from typing import Tuple
-import zlib
+from binascii import crc32
+from typing import IO
 
-import serial
-from serial.serialutil import Timeout
+from serial import Serial
 
-from .commands import *
+from .cmd_flash import BK7231CmdFlash
+from .packets import EraseSize
+from .utils import fix_addr
 
 
-class BK7231Serial(object):
-    COMMON_COMMAND_PREAMBLE = b"\x01\xe0\xfc"
-    LONG_COMMAND_MARKER = b"\xff\xf4"
-
-    RESPONSE_PREAMBLE = b"\x04\x0e"
-    RESPONSE_DATA_MARKER = COMMON_COMMAND_PREAMBLE
-    LONG_RESPONSE_MARKER = b"\xf4"
-
-    MAX_FAIL_COUNT = 100
-
-    def __init__(self, device, baudrate, timeout=10.0):
-        initial_baudrate = 115200
-        self.device = device
-        self.baudrate = baudrate
-        self.timeout = timeout
-        self.serial = serial.Serial(
-            port=self.device, baudrate=initial_baudrate, timeout=timeout
+class BK7231Serial(BK7231CmdFlash):
+    def __init__(
+        self,
+        port: str,
+        baudrate: int = 115200,
+        link_timeout: float = 10.0,
+        cmnd_timeout: float = 1.0,
+        debug_hl: bool = False,
+        debug_ll: bool = False,
+    ) -> None:
+        super().__init__(
+            serial=Serial(
+                port=port,
+                baudrate=115200,
+                timeout=cmnd_timeout,
+            ),
         )
-        if not self.__wait_for_link():
+        self.debug_hl = debug_hl
+        self.debug_ll = debug_ll
+        # reset the chip using RTS line
+        self.hw_reset()
+        # try to communicate
+        if not self.wait_for_link(link_timeout):
             raise TimeoutError("Timed out attempting to link with chip")
-        if self.baudrate != initial_baudrate:
-            self.set_baudrate(self.baudrate)
-        self.chip_info = self.read_chip_info()
-        print(f"Connected! Chip info: {self.chip_info}")
+        # update the transmission baudrate
+        if self.serial.baudrate != baudrate:
+            self.set_baudrate(baudrate)
+        # read and save chip info
+        self.read_chip_info()
+        # apply workarounds for BK7231N
+        if self.chip_info == "0x7231c":
+            self.crc_end_incl = True
+        # print chip type
+        if self.chip_info:
+            print(f"Connected! Chip info: {self.chip_info}")
+        else:
+            print(f"Connected, but read no chip version")
 
     def close(self):
         if self.serial and not self.serial.closed:
             self.serial.close()
+            self.serial = None
 
-    def read_flash_range_crc(self, start_address, end_address):
-        command_type = COMMAND_FLASHCRC
-        payload = struct.pack("<II", start_address, end_address)
-        payload = self.__build_payload(command_type.code, payload_body=payload)
-        _, response_payload = self.__send_and_parse_response(payload=payload, request_type=command_type)
-        return struct.unpack("<I", response_payload)[0]
+    def program_flash(
+        self,
+        io: IO[bytes],
+        io_size: int,
+        start: int,
+        verbose: bool = True,
+        crc_check: bool = False,
+        really_erase: bool = False,
+        dry_run: bool = False,
+    ) -> bool:
+        start = fix_addr(start)
+        end = start + io_size
+        addr = start
+        if start & 0xFFF and not really_erase:
+            raise ValueError(f"Start address not on 4K boundary; sector erase needed")
 
-    def reboot_chip(self):
-        command_type = COMMAND_REBOOT
-        payload = self.__build_payload(command_type.code, payload_body=b"\xA5")
-        self.serial.write(payload)
-        self.serial.flush()
+        # unprotect flash memory for BK7231N
+        if self.chip_info == "0x7231c":
+            if verbose:
+                print("Trying to unprotect flash memory...")
+            if not self.flash_unprotect():
+                raise RuntimeError("Failed to unprotect")
 
-    def set_baudrate(self, rate):
-        delay = 20
-        command_type = COMMAND_SETBAUDRATE
-        payload = struct.pack("<IB", rate, delay)
-        payload = self.__build_payload(command_type.code, payload)
-        self.__send_payload(payload)
-        time.sleep(delay/1000/2)
-        self.serial.baudrate = rate
-        response_type, _ = self.__read_response(command_type)
-        return response_type == command_type.code
+        # start is NOT on sector boundary
+        if addr & 0xFFF:
+            if verbose:
+                print("Writing unaligned data...")
+            # erase sector containing data start
+            sector_addr = addr & 0x1FF000
+            self.flash_erase_block(
+                sector_addr,
+                EraseSize.SECTOR_4K,
+                dry_run=dry_run,
+            )
 
-    def read_chip_info(self):
-        command_type = COMMAND_READCHIPINFO
-        payload = self.__build_payload(command_type.code)
-        response_type, response_payload = self.__send_and_parse_response(payload=payload, request_type=command_type)
-        if response_type == command_type.code:
-            return response_payload.decode("utf8")
-        else:
-            raise ValueError("Invalid chip_info response")
-
-    def read_flash_4k(self, start_addr: int, segment_count: int = 1, crc_check: bool = True):
-        if (start_addr & 0xFFF) != 0:
-            raise ValueError(f"Starting address {start_addr:#x} is not 4K aligned")
-        if start_addr < 0x10000:
-            raise ValueError(f"Starting address {start_addr:#x} is smaller than 0x10000")
-
-        flash_data = bytearray()
-        end_addr = start_addr + segment_count * 0x1000
-        cur_addr = start_addr
-        fail_count = 0
-
-        while cur_addr < end_addr:
-            try:
-                print(f"Reading 4k page at {cur_addr:#X} ({(((cur_addr - start_addr) / (end_addr - start_addr)) * 100):.2f}%)")
-                block = self.__read_flash_4k_operation(cur_addr)
-                crc = self.read_flash_range_crc(cur_addr, cur_addr+0x1000)
-                actual_crc = zlib.crc32(block) ^ 0xFFFFFFFF
-                if (crc == actual_crc) and crc_check or not crc_check:
-                    flash_data += block
-                    cur_addr += 0x1000
-                else:
-                    raise ValueError(f"Expected CRC value {crc:#x} does not match calculated CRC value {actual_crc:#x}")
-
-            except ValueError as e:
-                fail_count += 1
-                if fail_count > self.MAX_FAIL_COUNT:
-                    raise e
-
-        return flash_data
-
-    def __wait_for_link(self, link_wait_timeout=0.01):
-        timeout = Timeout(self.timeout)
-        self.serial.timeout = link_wait_timeout
-        while not timeout.expired():
-            try:
-                command_type = COMMAND_LINKCHECK
-                payload = self.__build_payload(command_type.code)
-                response_code, response_payload = self.__send_and_parse_response(payload=payload, request_type=command_type)
-                if response_code == command_type.response_code and response_payload == b"\x00":
-                    self.__drain()
-                    self.serial.timeout = self.timeout
+            # write data in 256-byte chunks
+            sector_end = (addr & 0x1FF000) + 4096
+            while addr & 0xFFF:
+                block = io.read(min(256, sector_end - addr))
+                block_size = len(block)
+                if not block_size:
+                    # writing finished
                     return True
-            except ValueError:
-                pass
-        return False
+                self.flash_write_bytes(
+                    addr,
+                    block,
+                    dry_run=dry_run,
+                )
+                addr += block_size
 
-    def __read_flash_4k_operation(self, start_addr):
-        command_type = COMMAND_READFLASH4K
-        payload = struct.pack("<I", start_addr)
-        payload = self.__build_payload(command_type.code, payload, long_command=True)
+        assert (addr & 0xFFF) == 0
 
-        _, response_payload = self.__send_and_parse_response(payload=payload, request_type=command_type)
-        
-        if len(response_payload) != (4 * 1024) + 4:
-            raise SystemError(f"Expected length {(4 * 1024) + 4}, but got {len(response_payload)}")
-
-        address = struct.unpack("<I", response_payload[:4])[0]
-        if address != start_addr:
-            raise SystemError(f"Invalid read. Requested address {start_addr:#x} does not match returned address {address:#x}")
-
-        return response_payload[4:]
-
-    def __send_payload(self, payload):
-        self.serial.write(payload)
-        self.serial.flush()
-
-    def __read_response(self, request_type: CommandType):
-        response_length = 0
-        read_response_type = None
-
-        while read_response_type != request_type.code:
-            try:
-                data = self.serial.read_until(self.RESPONSE_PREAMBLE)
-                if len(data) == 0 or data[-len(self.RESPONSE_PREAMBLE):] != self.RESPONSE_PREAMBLE:
-                    raise ValueError("No response received")
-
-                response_length = struct.unpack("B", self.serial.read(1))[0]
-                is_long_command = response_length == 0xFF
-                if request_type.is_long != is_long_command:
-                    # Invalid response, so continue reading until a new valid packet is found
-                    continue
-
-                response_data_marker = self.serial.read(len(self.RESPONSE_DATA_MARKER))
-                if response_data_marker != self.RESPONSE_DATA_MARKER:
-                    # Invalid packet, so continue reading until a new valid packet is found
-                    continue
-
-                if is_long_command:
-                    long_response_marker = self.serial.read(1)
-
-                    if long_response_marker != self.LONG_RESPONSE_MARKER:
-                        # Invalid packet, so continue reading until a new valid packet is found
-                        continue
-
-                    response_length, read_response_type = struct.unpack(
-                        "<HH", self.serial.read(4)
+        # write the rest of data in 4K sectors
+        crc = 0
+        while True:
+            block = io.read(4096)
+            block_size = len(block)
+            block_empty = not len(block.strip(b"\xff"))
+            if not block_size:
+                if crc_check:
+                    if verbose:
+                        print("Verifying CRC")
+                    pad_size = 4096 - (io_size % 4096)
+                    crc = crc32(b"\xff" * pad_size, crc)
+                    crc_chip = self.read_flash_range_crc(
+                        start=start,
+                        end=start + io_size + pad_size,
                     )
-                    response_length -= 2
+                    if crc != crc_chip:
+                        raise ValueError(
+                            f"Chip CRC value {crc_chip:X} does not match calculated CRC value {crc:X}"
+                        )
+                if verbose:
+                    print("OK!")
+                return True
+            # print progress info
+            if verbose:
+                progress = 100.0 - (end - addr) / io_size * 100.0
+                if block_empty:
+                    print(f"Erasing at 0x{addr:X} ({progress:.2f}%)")
                 else:
-                    read_response_type = struct.unpack("B", self.serial.read(1))[0]
-                    response_length -= 4
-
-                # Special case if the request type has a special response code - if so
-                # break out
-                if (request_type.has_response_code and
-                        read_response_type == request_type.response_code):
-                    break
-
-            except struct.error:
-                pass
-
-        response_payload = self.serial.read(response_length)
-        return read_response_type, response_payload
-
-    def __send_and_parse_response(self, payload, request_type: CommandType) -> Tuple[int, bytes]:
-        self.__send_payload(payload)
-        return self.__read_response(request_type)
-
-    def __drain(self):
-        self.serial.timeout = 0.001
-        while self.serial.read(1 * 1024) != b"":
-            pass
-        self.serial.timeout = self.timeout
-
-    def __build_payload_preamble(self, payload_type, payload_length=0, long_command=False):
-        payload = self.COMMON_COMMAND_PREAMBLE
-        payload_length += 1
-        if payload_length >= 0xFF or long_command:
-            payload += self.LONG_COMMAND_MARKER
-            payload += struct.pack("<H", payload_length)
-        else:
-            payload += struct.pack("B", payload_length)
-        payload += struct.pack("B", payload_type)
-        return payload
-
-    def __build_payload(self, payload_type, payload_body=None, long_command=False):
-        if payload_body is None:
-            payload_body = b''
-        preamble = self.__build_payload_preamble(payload_type, len(payload_body), long_command=long_command)
-        return preamble + payload_body
+                    print(f"Erasing and writing at 0x{addr:X} ({progress:.2f}%)")
+            # compute CRC32
+            crc = crc32(block, crc)
+            self.flash_erase_block(
+                addr,
+                EraseSize.SECTOR_4K,
+                dry_run=dry_run,
+            )
+            if not block_empty:
+                # skip empty blocks
+                self.flash_write_4k(
+                    addr,
+                    block,
+                    dry_run=dry_run,
+                )
+            addr += block_size
 
 
-__all__ = ['BK7231Serial']
+__all__ = ["BK7231Serial"]
