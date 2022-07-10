@@ -49,4 +49,4 @@ Combined with `--rbl`, you can also extract fully reconstructed RBL files for la
 Extracted artifacts are dependent on the flash layout supplied, but usually there are two partitions `app` and `bootloader`. If an extracted partition is also a known encrypted code partition (e.g. `app`), its decrypted version is also extracted with the suffix `_decrypted.bin`.
 
 ## Contributors
-- [kuba2k2](https://github.com/kuba2k2)
+- [Kuba Szczodrzyński - @kuba2k2](https://github.com/kuba2k2)
