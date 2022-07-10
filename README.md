@@ -1,6 +1,9 @@
 # bk7231tools
 This is a collection of tools to interact with and analyze artifacts for BK7231 MCUs.
 
+## Contributors
+- [Kuba Szczodrzyński - @kuba2k2](https://github.com/kuba2k2)
+
 ## Installation
 Install the dependencies and set up a Python virtualenv using `pipenv install`. Subsequent invocations can be done in a shell context after executing `pipenv shell` or by using `pipenv run <command>`.
 
@@ -47,6 +50,3 @@ The above command flags are `-e` to extract - otherwise only a listing is shown 
 Combined with `--rbl`, you can also extract fully reconstructed RBL files for later usage.
 
 Extracted artifacts are dependent on the flash layout supplied, but usually there are two partitions `app` and `bootloader`. If an extracted partition is also a known encrypted code partition (e.g. `app`), its decrypted version is also extracted with the suffix `_decrypted.bin`.
-
-## Contributors
-- [Kuba Szczodrzyński - @kuba2k2](https://github.com/kuba2k2)
