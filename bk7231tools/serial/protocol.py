@@ -1,5 +1,6 @@
 from struct import pack, unpack
 from textwrap import shorten
+from time import sleep
 from typing import Callable, Union
 
 from serial import Serial
@@ -22,7 +23,11 @@ class BK7231Protocol:
         self.serial = serial
 
     def hw_reset(self):
+        self.serial.rts = True
+        self.serial.dtr = True
+        sleep(0.1)
         self.serial.rts = False
+        self.serial.dtr = False
 
     def drain(self):
         tm_prev = self.serial.timeout
