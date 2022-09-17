@@ -266,7 +266,7 @@ def parse_args():
     return parser.parse_args()
 
 
-if __name__ == "__main__":
+def cli():
     args = parse_args()
 
     try:
@@ -277,3 +277,7 @@ if __name__ == "__main__":
             args.handler(args)
     except TimeoutError:
         print(traceback.format_exc(), file=sys.stderr)
+
+
+if __name__ == "__main__":
+    cli()

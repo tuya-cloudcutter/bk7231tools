@@ -1,0 +1,21 @@
+[tool.poetry]
+name = "bk7231tools"
+version = "1.0.0"
+description = "Tools to interact with and analyze artifacts for BK7231 MCUs"
+authors = ["Khaled Nassar <kmhnassar@gmail.com>"]
+license = "MIT"
+
+[tool.poetry.dependencies]
+python = "^3.7"
+pyserial = "^3.5"
+
+[tool.poetry.dev-dependencies]
+autopep8 = "^1.7.0"
+isort = "^5.10.1"
+
+[tool.poetry.scripts]
+bk7231tools = "bk7231tools:main"
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
