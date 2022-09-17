@@ -28,6 +28,13 @@ def __add_serial_args(parser: argparse.ArgumentParser):
         default=10.0,
         help="Timeout for operations in seconds (default: 10.0)",
     )
+    parser.add_argument(
+        "-D",
+        "--debug",
+        action="store_true",
+        default=False,
+        help="Visualize serial protocol messages (default: False)",
+    )
     return parser
 
 
@@ -196,8 +203,8 @@ def dissect_dump_file(args):
                                     output_directory=output_directory, extract=args.extract)
 
 
-def connect_device(device, baudrate, timeout):
-    s = BK7231Serial(device, baudrate, timeout)
+def connect_device(device, baudrate, timeout, debug):
+    s = BK7231Serial(device, baudrate, timeout, debug_hl=debug)
     print(f"Connected! Chip info: {s.chip_info}, flash ID: {s.flash_id.hex()}")
     return s
 
@@ -353,7 +360,7 @@ def cli():
 
     try:
         if args.device_required:
-            with closing(connect_device(args.device, args.baudrate, args.timeout)) as device:
+            with closing(connect_device(args.device, args.baudrate, args.timeout, args.debug)) as device:
                 args.handler(device, args)
         else:
             args.handler(args)
