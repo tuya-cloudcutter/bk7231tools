@@ -231,6 +231,30 @@ def read_flash(device: BK7231Serial, args):
             fs.write(data)
 
 
+def write_flash(device: BK7231Serial, args):
+    args.start = args.start or 0x000000
+    args.skip = args.skip or 0x000000
+
+    try:
+        size = os.stat(args.file).st_size - args.skip
+    except FileNotFoundError:
+        print("Input file doesn't exist")
+        exit(1)
+
+    print(f"Writing {size} bytes to 0x{args.start:X}")
+
+    with open(args.file, "rb") as fs:
+        fs.seek(args.skip, os.SEEK_SET)
+        device.program_flash(
+            io=fs,
+            io_size=size,
+            start=args.start,
+            verbose=True,
+            crc_check=not args.no_verify_checksum,
+            dry_run=False,
+        )
+
+
 def parse_args():
     parser = argparse.ArgumentParser(
         prog="bk7231tools",
@@ -283,6 +307,31 @@ def parse_args():
     )
     parser_read_flash.set_defaults(handler=read_flash)
     parser_read_flash.set_defaults(device_required=True)
+
+    parser_write_flash = subparsers.add_parser("write_flash", help="Write data to flash")
+    parser_write_flash = __add_serial_args(parser_write_flash)
+    parser_write_flash.add_argument("file", help="File to write to flash")
+    parser_write_flash.add_argument(
+        "-s",
+        "--start",
+        type=lambda x: int(x, 0),
+        help="Starting address to write to [dec/hex] (default: 0x000000)",
+    )
+    parser_write_flash.add_argument(
+        "-S",
+        "--skip",
+        type=lambda x: int(x, 0),
+        help="Amount of bytes to skip from **input file** [dec/hex] (default: 0)",
+    )
+    parser_write_flash.add_argument(
+        "--no-verify-checksum",
+        dest="no_verify_checksum",
+        action="store_true",
+        default=False,
+        help="Do not verify checksum of written flash segments - not recommended (default: False)",
+    )
+    parser_write_flash.set_defaults(handler=write_flash)
+    parser_write_flash.set_defaults(device_required=True)
 
     parser_dissect_dump = subparsers.add_parser("dissect_dump", help="Dissect and extract RBL containers from flash dump files")
     parser_dissect_dump.add_argument("file", help="Flash dump file to dissect")
