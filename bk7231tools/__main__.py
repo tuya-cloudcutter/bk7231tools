@@ -200,13 +200,32 @@ def connect_device(device, baudrate, timeout):
     return BK7231Serial(device, baudrate, timeout)
 
 
-def chip_info(device: BK7231Serial, args: List[str]):
+def chip_info(device: BK7231Serial, args):
     print(device.read_chip_info())
 
 
-def read_flash(device: BK7231Serial, args: List[str]):
+def read_flash(device: BK7231Serial, args):
+    if args.deprecated_start is not None:
+        print("WARNING! --start-address is deprecated: please use --start instead.")
+        if args.start is not None:
+            print("Both --start-address and --start provided. Cannot continue.")
+            exit(1)
+        args.start = args.deprecated_start
+
+    if args.deprecated_count is not None:
+        print("WARNING! -c/--count is deprecated: please use -l/--length <bytes> instead.")
+        if args.length is not None:
+            print("Both --count and --length provided. Cannot continue.")
+            exit(1)
+        args.length = args.deprecated_count * 0x1000
+
+    args.start = args.start or 0x000000
+    args.length = args.length or 0x200000
+
+    print(f"Reading {args.length} bytes from 0x{args.start:X}")
+
     with open(args.file, "wb") as fs:
-        for data in device.flash_read(args.start_address, args.count * 4096, not args.no_verify_checksum):
+        for data in device.flash_read(args.start, args.length, not args.no_verify_checksum):
             fs.write(data)
 
 
@@ -228,25 +247,37 @@ def parse_args():
     parser_read_flash.add_argument("file", help="File to store flash data")
     parser_read_flash.add_argument(
         "-s",
-        "--start-address",
-        dest="start_address",
-        type=lambda x: int(x, 16),
-        default=0x10000,
-        help="Starting address to read from [hex] (default: 0x10000)",
+        "--start",
+        type=lambda x: int(x, 0),
+        help="Starting address to read from [dec/hex] (default: 0x000000)",
     )
     parser_read_flash.add_argument(
-        "-c",
-        "--count",
-        type=int,
-        default=16,
-        help="Number of 4K segments to read from flash (default: 16 segments = 64K)",
+        "-l",
+        "--length",
+        type=lambda x: int(x, 0),
+        help="Length to read from flash, in bytes [dec/hex] (default: 0x200000 = 2 MiB)",
     )
     parser_read_flash.add_argument(
         "--no-verify-checksum",
         dest="no_verify_checksum",
         action="store_true",
         default=False,
-        help="Must be used for BK7231N devices. Do not verify checksum of retrieved flash segments and fail if they do not match (default: False)",
+        help="Do not verify checksum of retrieved flash segments - not recommended (default: False)",
+    )
+    parser_read_flash.add_argument(
+        "--start-address",
+        dest="deprecated_start",
+        type=lambda x: int(x, 16),
+        required=False,
+        help=argparse.SUPPRESS,
+    )
+    parser_read_flash.add_argument(
+        "-c",
+        "--count",
+        dest="deprecated_count",
+        type=int,
+        required=False,
+        help=argparse.SUPPRESS,
     )
     parser_read_flash.set_defaults(handler=read_flash)
     parser_read_flash.set_defaults(device_required=True)

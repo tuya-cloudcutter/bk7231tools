@@ -1,3 +1,4 @@
+import struct
 from struct import pack, unpack
 from textwrap import shorten
 from time import sleep
@@ -131,7 +132,10 @@ class BK7231Protocol:
                 print(f"-> RX ({size}): Check OK")
 
         if packet.HAS_RESP_OTHER:
-            response = cls.deserialize(response)
+            try:
+                response = cls.deserialize(response)
+            except struct.error:
+                raise ValueError(f"Partial response received: {response.hex(' ', -1)}")
             if self.debug_hl:
                 print(f"-> RX ({size}):", shorten(str(response), 64))
             return response
