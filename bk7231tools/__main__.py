@@ -248,6 +248,12 @@ def write_flash(device: BK7231Serial, args):
         print("Input file doesn't exist")
         exit(1)
 
+    if args.length:
+        if args.length > size:
+            print("Length is bigger than entire file size")
+            exit(1)
+        size = args.length
+
     print(f"Writing {size} bytes to 0x{args.start:X}")
 
     with open(args.file, "rb") as fs:
@@ -329,6 +335,12 @@ def parse_args():
         "--skip",
         type=lambda x: int(x, 0),
         help="Amount of bytes to skip from **input file** [dec/hex] (default: 0)",
+    )
+    parser_read_flash.add_argument(
+        "-l",
+        "--length",
+        type=lambda x: int(x, 0),
+        help="Length of data to write, in bytes [dec/hex] (default: 0 = entire input file)",
     )
     parser_write_flash.add_argument(
         "--no-verify-checksum",
