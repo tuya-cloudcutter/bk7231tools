@@ -1,4 +1,5 @@
 from binascii import crc32
+from io import BytesIO
 from typing import IO
 
 from serial import Serial
@@ -46,6 +47,17 @@ class BK7231Serial(BK7231CmdFlash):
         if self.serial and not self.serial.closed:
             self.serial.close()
             self.serial = None
+
+    def read_flash_4k(
+        self,
+        start: int,
+        count: int = 1,
+        crc_check: bool = True,
+    ) -> bytes:
+        out = BytesIO()
+        for data in self.flash_read(start, count * 4096, crc_check):
+            out.write(data)
+        return out.getvalue()
 
     def program_flash(
         self,

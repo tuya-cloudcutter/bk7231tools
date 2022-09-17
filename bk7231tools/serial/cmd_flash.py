@@ -104,17 +104,6 @@ class BK7231CmdFlash(BK7231CmdChip):
         if crc_check:
             self.check_crc(start, data)
 
-    def read_flash_4k(
-        self,
-        start: int,
-        count: int = 1,
-        crc_check: bool = True,
-    ) -> bytes:
-        out = BytesIO()
-        for data in self.flash_read(start, count * 4096, crc_check):
-            out.write(data)
-        return out.getvalue()
-
     def flash_read(
         self,
         start: int,
