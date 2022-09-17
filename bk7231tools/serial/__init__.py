@@ -41,9 +41,6 @@ class BK7231Serial(BK7231CmdFlash):
         # apply workarounds for BK7231N
         if self.chip_info == "0x7231c":
             self.crc_end_incl = True
-        # print chip type
-        chip_info = self.chip_info or "NOT FOUND"
-        print(f"Connected! Chip info: {chip_info}, flash ID: {self.flash_id.hex()}")
 
     def close(self):
         if self.serial and not self.serial.closed:
