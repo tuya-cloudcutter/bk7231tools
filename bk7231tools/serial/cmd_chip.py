@@ -69,7 +69,7 @@ class BK7231CmdChip(BK7231Protocol):
             # read chip type from register if command is not implemented
             self.chip_info = hex(self.register_read(0x800000))  # SCTRL_CHIP_ID
         else:
-            self.chip_info = response.version
+            self.chip_info = response.version.decode()
         return self.chip_info
 
     def register_read(self, address: int) -> int:
@@ -86,6 +86,8 @@ class BK7231CmdChip(BK7231Protocol):
         # command arguments are (incl., excl.)
         if start == end:
             raise ValueError("Start and end must differ! (end is exclusive)")
+        if start > end:
+            raise ValueError("Start must be lesser than end!")
         # print a warning instead of just timeout-ing
         timeout_current = self.serial.timeout
         timeout_minimum = (end - start) / self.crc_speed_bps

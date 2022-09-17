@@ -37,14 +37,13 @@ class BK7231Serial(BK7231CmdFlash):
             self.set_baudrate(baudrate)
         # read and save chip info
         self.read_chip_info()
+        self.flash_read_id()
         # apply workarounds for BK7231N
         if self.chip_info == "0x7231c":
             self.crc_end_incl = True
         # print chip type
-        if self.chip_info:
-            print(f"Connected! Chip info: {self.chip_info}")
-        else:
-            print(f"Connected, but read no chip version")
+        chip_info = self.chip_info or "NOT FOUND"
+        print(f"Connected! Chip info: {chip_info}, flash ID: {self.flash_id.hex()}")
 
     def close(self):
         if self.serial and not self.serial.closed:
@@ -71,8 +70,7 @@ class BK7231Serial(BK7231CmdFlash):
         if self.chip_info == "0x7231c":
             if verbose:
                 print("Trying to unprotect flash memory...")
-            if not self.flash_unprotect():
-                raise RuntimeError("Failed to unprotect")
+            self.flash_unprotect()
 
         # start is NOT on sector boundary
         if addr & 0xFFF:
