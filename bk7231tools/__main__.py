@@ -336,7 +336,7 @@ def parse_args():
         type=lambda x: int(x, 0),
         help="Amount of bytes to skip from **input file** [dec/hex] (default: 0)",
     )
-    parser_read_flash.add_argument(
+    parser_write_flash.add_argument(
         "-l",
         "--length",
         type=lambda x: int(x, 0),

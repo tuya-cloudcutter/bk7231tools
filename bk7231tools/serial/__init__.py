@@ -120,8 +120,7 @@ class BK7231Serial(BK7231CmdFlash):
                 if crc_check:
                     if verbose:
                         print("Verifying CRC")
-                    align = io_size % 4096
-                    pad_size = align * (4096 - align)
+                    pad_size = (4096 - (io_size % 4096)) % 4096
                     crc = crc32(b"\xff" * pad_size, crc)
                     crc_chip = self.read_flash_range_crc(
                         start=start,
