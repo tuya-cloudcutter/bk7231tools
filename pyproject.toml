@@ -14,7 +14,7 @@ autopep8 = "^1.7.0"
 isort = "^5.10.1"
 
 [tool.poetry.scripts]
-bk7231tools = "bk7231tools:main"
+bk7231tools = "bk7231tools:cli"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]
