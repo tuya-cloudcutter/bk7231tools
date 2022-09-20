@@ -6,6 +6,7 @@ from serial import Serial
 
 from .cmd_flash import BK7231CmdFlash
 from .packets import EraseSize
+from .protocol import ProtocolType
 from .utils import fix_addr
 
 
@@ -38,10 +39,10 @@ class BK7231Serial(BK7231CmdFlash):
             self.set_baudrate(baudrate)
         # read and save chip info
         self.read_chip_info()
-        self.flash_read_id()
-        # apply workarounds for BK7231N
-        if self.chip_info == "0x7231c":
-            self.crc_end_incl = True
+        try:
+            self.flash_read_id()
+        except NotImplementedError:
+            self.flash_id = b"\x00\x00\x00"
 
     def close(self):
         if self.serial and not self.serial.closed:
@@ -76,7 +77,7 @@ class BK7231Serial(BK7231CmdFlash):
             raise ValueError(f"Start address not on 4K boundary; sector erase needed")
 
         # unprotect flash memory for BK7231N
-        if self.chip_info == "0x7231c":
+        if self.protocol_type == ProtocolType.FULL:
             if verbose:
                 print("Trying to unprotect flash memory...")
             self.flash_unprotect()

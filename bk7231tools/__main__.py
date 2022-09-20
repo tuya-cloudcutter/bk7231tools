@@ -205,12 +205,17 @@ def dissect_dump_file(args):
 
 def connect_device(device, baudrate, timeout, debug):
     s = BK7231Serial(device, baudrate, timeout, debug_hl=debug)
-    print(f"Connected! Chip info: {s.chip_info}, flash ID: {s.flash_id.hex()}")
+    items = [
+        "Chip info: " + s.chip_info,
+        "Flash ID: " + s.flash_id.hex(' ', -1),
+        "Protocol: " + s.protocol_type.name,
+    ]
+    print("Connected!", " / ".join(items))
     return s
 
 
 def chip_info(device: BK7231Serial, args):
-    print(device.read_chip_info())
+    pass  # chip info is always printed by connect_device()
 
 
 def read_flash(device: BK7231Serial, args):

@@ -1,4 +1,5 @@
 import struct
+from enum import Enum
 from struct import pack, unpack
 from textwrap import shorten
 from time import sleep
@@ -14,11 +15,57 @@ PACKET_RESP_PREAMBLE = b"\x04\x0E"
 PACKET_RESP_DATA = b"\x01\xE0\xFC"
 PACKET_RESP_LONG = b"\xF4"
 
+SHORT = 0
+LONG = 1
+
+
+class ProtocolType(Enum):
+    UNKNOWN = []
+    # BK7231N BootROM protocol
+    FULL = [
+        (0x01, SHORT),  # CMD_WriteReg
+        (0x03, SHORT),  # CMD_ReadReg
+        (0x0E, SHORT),  # CMD_Reboot
+        (0x0F, SHORT),  # CMD_SetBaudRate
+        (0x10, SHORT),  # CMD_CheckCRC
+        (0x70, SHORT),  # CMD_RESET
+        (0xAA, SHORT),  # CMD_StayRom
+        (0x06, LONG),  # CMD_FlashWrite
+        (0x07, LONG),  # CMD_FlashWrite4K
+        (0x08, LONG),  # CMD_FlashRead
+        (0x09, LONG),  # CMD_FlashRead4K
+        (0x0A, LONG),  # CMD_FlashEraseAll
+        (0x0B, LONG),  # CMD_FlashErase4K
+        (0x0C, LONG),  # CMD_FlashReadSR
+        (0x0D, LONG),  # CMD_FlashWriteSR
+        (0x0E, LONG),  # CMD_FlashGetMID
+        (0x0F, LONG),  # CMD_FlashErase
+    ]
+    # BK7231S_1.0.5
+    BASIC_105 = [
+        (0x0E, SHORT),  # CMD_Reboot
+        (0x0F, SHORT),  # CMD_SetBaudRate
+        (0x10, SHORT),  # CMD_CheckCRC
+        (0x11, SHORT),  # CMD_ReadBootVersion
+        (0x06, LONG),  # CMD_FlashWrite
+        (0x07, LONG),  # CMD_FlashWrite4K
+        (0x09, LONG),  # CMD_FlashRead4K
+        (0x0F, LONG),  # CMD_FlashErase
+    ]
+    BASIC_DEFAULT = BASIC_105
+
+
+PROTOCOLS = {
+    "0x7231c": ProtocolType.FULL,
+    "BK7231S_1.0.5": ProtocolType.BASIC_105,
+}
+
 
 class BK7231Protocol:
     serial: Serial
     debug_hl: bool = False
     debug_ll: bool = False
+    protocol_type: ProtocolType = ProtocolType.UNKNOWN
 
     def __init__(self, serial: Serial) -> None:
         self.serial = serial
@@ -36,6 +83,15 @@ class BK7231Protocol:
         while self.serial.read(1 * 1024) != b"":
             pass
         self.serial.timeout = tm_prev
+
+    def require_protocol(self, code: int, is_long: bool):
+        if self.protocol_type == ProtocolType.UNKNOWN:
+            return
+        pair = (code, is_long)
+        if pair not in self.protocol_type.value:
+            raise NotImplementedError(
+                f"Not implemented in protocol {self.protocol_type.name}: code={code}, is_long={is_long}"
+            )
 
     @staticmethod
     def encode(packet: Packet) -> bytes:
@@ -76,6 +132,8 @@ class BK7231Protocol:
         packet: Packet,
         after_send: Callable = None,
     ) -> Union[Packet, bool]:
+        self.require_protocol(packet.CODE, packet.IS_LONG)
+
         if self.debug_hl:
             print("<- TX:", shorten(str(packet), 64))
 
