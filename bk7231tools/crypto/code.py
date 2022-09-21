@@ -1,6 +1,7 @@
-from operator import truediv
 from typing import Tuple
+
 from .util import uint8, uint16, uint32
+
 
 def _generate_uint_pn15(index_mask, flag):
     if flag:
@@ -11,13 +12,14 @@ def _generate_uint_pn15(index_mask, flag):
 
     xor_lhs = uint16(uint16(index_mask >> 7) + uint16(index_mask * 0x200))
     xor_rhs = uint16(val_rshift_5 * 0x1000) + \
-            uint16(val_rshift_5_nibble * 0x100) + \
-            uint8(val_rshift_5 * 0x10) + \
-            val_rshift_5_nibble
+        uint16(val_rshift_5_nibble * 0x100) + \
+        uint8(val_rshift_5 * 0x10) + \
+        val_rshift_5_nibble
 
     xor_rhs = xor_rhs & PN15_AND_CONST
-    
+
     return uint16(xor_lhs ^ xor_rhs)
+
 
 def _generate_uint_pn16(index_mask, flag):
     if flag:
@@ -34,6 +36,7 @@ def _generate_uint_pn16(index_mask, flag):
 
     return uint32(xor_lhs ^ xor_rhs)
 
+
 def _generate_uint_pn32(index_mask, flag):
     if flag:
         return 0
@@ -41,12 +44,13 @@ def _generate_uint_pn32(index_mask, flag):
     xor_lhs = uint32(index_mask >> 0xF | index_mask << 0x11)
     xor_rhs_start = (index_mask >> 2) & 0xF
     xor_rhs = uint32(xor_rhs_start * 0x10000000) + \
-            uint32(xor_rhs_start * 0x01000000) + \
-            uint32(xor_rhs_start * 0x00100000) + \
-            uint32(xor_rhs_start * 0x00010000) + \
-            uint32(xor_rhs_start * 0x00001111)
+        uint32(xor_rhs_start * 0x01000000) + \
+        uint32(xor_rhs_start * 0x00100000) + \
+        uint32(xor_rhs_start * 0x00010000) + \
+        uint32(xor_rhs_start * 0x00001111)
     xor_rhs = xor_rhs & PN32_AND_CONST
     return xor_lhs ^ xor_rhs
+
 
 class BekenCodeCipher(object):
     BLOCK_LENGTH_BYTES = 32
@@ -57,15 +61,15 @@ class BekenCodeCipher(object):
     def encrypt(self, data: bytes, stream_start_offset: int = 0):
         if (len(data) % self.BLOCK_LENGTH_BYTES) != 0:
             raise ValueError(f"Given data length {len(data)} is not a multiple of block length {self.BLOCK_LENGTH_BYTES}")
-        
+
         encrypted = bytearray()
         for i in range(0, len(data), self.BLOCK_LENGTH_BYTES):
             block = data[i:i+self.BLOCK_LENGTH_BYTES]
             block_start_offset = (i + stream_start_offset)
             encrypted.extend(self._encrypt_block(block, block_start_offset))
-        
+
         return encrypted
-    
+
     def decrypt(self, data: bytes, stream_start_offset: int = 0):
         return self.encrypt(data, stream_start_offset=stream_start_offset)
 
@@ -79,7 +83,7 @@ class BekenCodeCipher(object):
     def _encrypt_block(self, block: bytes, block_start_offset: int):
         if len(block) != self.BLOCK_LENGTH_BYTES:
             raise ValueError(f"Block length must be exactly {self.BLOCK_LENGTH_BYTES} bytes")
-        
+
         WORD_SIZE = 4
 
         encrypted = bytearray()
@@ -96,7 +100,7 @@ class BekenCodeCipher(object):
 
         if (((self._coef3 & 0xff000000) == 0xff000000) or ((self._coef3 & 0xff000000) == 0)):
             coef3_highbyte_cond = True
-        
+
         if coef3_highbyte_cond:
             coef3_1_bit = coef3_2_bit = coef3_4_bit = coef3_8_bit = True
         if self._coef3 & 1 != 0:

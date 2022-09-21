@@ -1,10 +1,12 @@
 from binascii import crc32
+from io import BytesIO
 from typing import IO
 
 from serial import Serial
 
 from .cmd_flash import BK7231CmdFlash
 from .packets import EraseSize
+from .protocol import ProtocolType
 from .utils import fix_addr
 
 
@@ -37,19 +39,26 @@ class BK7231Serial(BK7231CmdFlash):
             self.set_baudrate(baudrate)
         # read and save chip info
         self.read_chip_info()
-        # apply workarounds for BK7231N
-        if self.chip_info == "0x7231c":
-            self.crc_end_incl = True
-        # print chip type
-        if self.chip_info:
-            print(f"Connected! Chip info: {self.chip_info}")
-        else:
-            print(f"Connected, but read no chip version")
+        try:
+            self.flash_read_id()
+        except NotImplementedError:
+            self.flash_id = b"\x00\x00\x00"
 
     def close(self):
         if self.serial and not self.serial.closed:
             self.serial.close()
             self.serial = None
+
+    def read_flash_4k(
+        self,
+        start: int,
+        count: int = 1,
+        crc_check: bool = True,
+    ) -> bytes:
+        out = BytesIO()
+        for data in self.flash_read(start, count * 4096, crc_check):
+            out.write(data)
+        return out.getvalue()
 
     def program_flash(
         self,
@@ -68,11 +77,10 @@ class BK7231Serial(BK7231CmdFlash):
             raise ValueError(f"Start address not on 4K boundary; sector erase needed")
 
         # unprotect flash memory for BK7231N
-        if self.chip_info == "0x7231c":
+        if self.protocol_type == ProtocolType.FULL:
             if verbose:
                 print("Trying to unprotect flash memory...")
-            if not self.flash_unprotect():
-                raise RuntimeError("Failed to unprotect")
+            self.flash_unprotect()
 
         # start is NOT on sector boundary
         if addr & 0xFFF:
@@ -113,7 +121,7 @@ class BK7231Serial(BK7231CmdFlash):
                 if crc_check:
                     if verbose:
                         print("Verifying CRC")
-                    pad_size = 4096 - (io_size % 4096)
+                    pad_size = (4096 - (io_size % 4096)) % 4096
                     crc = crc32(b"\xff" * pad_size, crc)
                     crc_chip = self.read_flash_range_crc(
                         start=start,

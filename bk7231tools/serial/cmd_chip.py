@@ -18,14 +18,13 @@ from .packets import (
     BkRebootCmnd,
     BkSetBaudRateCmnd,
 )
-from .protocol import BK7231Protocol
+from .protocol import PROTOCOLS, BK7231Protocol, ProtocolType
 from .utils import fix_addr
 
 
 class BK7231CmdChip(BK7231Protocol):
-    crc_end_incl: bool = False
     crc_speed_bps: int = 400000
-    chip_info: str
+    chip_info: str = None
 
     def wait_for_link(self, timeout: float) -> bool:
         tm = Timeout(timeout)
@@ -63,13 +62,20 @@ class BK7231CmdChip(BK7231Protocol):
         self.command(command)
 
     def read_chip_info(self) -> str:
+        if self.chip_info:
+            return self.chip_info
+        # try BK7231S chip info command
         command = BkBootVersionCmnd()
         response: BkBootVersionResp = self.command(command)
         if response.version == b"\x07":
             # read chip type from register if command is not implemented
+            # BK7231N only - BootROM
             self.chip_info = hex(self.register_read(0x800000))  # SCTRL_CHIP_ID
+            default = ProtocolType.FULL
         else:
-            self.chip_info = response.version
+            self.chip_info = response.version.decode().strip("\x00\x20")
+            default = ProtocolType.BASIC_DEFAULT
+        self.protocol_type = PROTOCOLS.get(self.chip_info, default)
         return self.chip_info
 
     def register_read(self, address: int) -> int:
@@ -86,6 +92,8 @@ class BK7231CmdChip(BK7231Protocol):
         # command arguments are (incl., excl.)
         if start == end:
             raise ValueError("Start and end must differ! (end is exclusive)")
+        if start > end:
+            raise ValueError("Start must be lesser than end!")
         # print a warning instead of just timeout-ing
         timeout_current = self.serial.timeout
         timeout_minimum = (end - start) / self.crc_speed_bps
@@ -101,7 +109,7 @@ class BK7231CmdChip(BK7231Protocol):
             )
             self.serial.timeout = ceil(timeout_minimum)
         # fix for BK7231N which also counts the end offset
-        if self.crc_end_incl:
+        if self.protocol_type == ProtocolType.FULL:
             end -= 1
         command = BkCheckCrcCmnd(start, end)
         response: BkCheckCrcResp = self.command(command)
