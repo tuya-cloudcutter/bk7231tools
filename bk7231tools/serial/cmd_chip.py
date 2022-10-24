@@ -18,7 +18,7 @@ from .packets import (
     BkRebootCmnd,
     BkSetBaudRateCmnd,
 )
-from .protocol import PROTOCOLS, BK7231Protocol, ProtocolType
+from .protocol import CHIP_BY_CRC, PROTOCOLS, BK7231Protocol, ProtocolType
 from .utils import fix_addr
 
 
@@ -64,9 +64,21 @@ class BK7231CmdChip(BK7231Protocol):
     def read_chip_info(self) -> str:
         if self.chip_info:
             return self.chip_info
+
+        # try bootloader CRC matching first - BK7231 (tysdk) doesn't respond to BootVersion
+        crc = self.read_flash_range_crc(0, 256)
+        if crc in CHIP_BY_CRC:
+            self.chip_info = CHIP_BY_CRC[crc]
+            default = ProtocolType.BASIC_DEFAULT
+            # read the protocol here already - it might not support BootVersion
+            self.protocol_type = PROTOCOLS.get(self.chip_info, default)
+
         # try BK7231S chip info command
         command = BkBootVersionCmnd()
-        response: BkBootVersionResp = self.command(command)
+        response: BkBootVersionResp = self.command(command, support_optional=True)
+        if not response:
+            return self.chip_info
+
         if response.version == b"\x07":
             # read chip type from register if command is not implemented
             # BK7231N only - BootROM
@@ -75,6 +87,7 @@ class BK7231CmdChip(BK7231Protocol):
         else:
             self.chip_info = response.version.decode().strip("\x00\x20")
             default = ProtocolType.BASIC_DEFAULT
+
         self.protocol_type = PROTOCOLS.get(self.chip_info, default)
         return self.chip_info
 

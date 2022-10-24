@@ -206,9 +206,9 @@ def dissect_dump_file(args):
 def connect_device(device, baudrate, timeout, debug):
     s = BK7231Serial(device, baudrate, timeout, debug_hl=debug)
     items = [
-        "Chip info: " + s.chip_info,
-        "Flash ID: " + s.flash_id.hex(' ', -1),
-        "Protocol: " + s.protocol_type.name,
+        f"Chip info: {s.chip_info}",
+        f"Flash ID: {s.flash_id.hex(' ', -1) if s.flash_id else None}",
+        f"Protocol: {s.protocol_type.name}",
     ]
     print("Connected!", " / ".join(items))
     return s

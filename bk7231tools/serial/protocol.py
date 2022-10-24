@@ -19,6 +19,12 @@ SHORT = 0
 LONG = 1
 
 
+CHIP_BY_CRC = {
+    # bl_bk7231_qn40_8485.bin
+    0xF0231EF6: "BK7231 tysdk 2018",
+}
+
+
 class ProtocolType(Enum):
     UNKNOWN = []
     # BK7231N BootROM protocol
@@ -52,12 +58,23 @@ class ProtocolType(Enum):
         (0x09, LONG),  # CMD_FlashRead4K
         (0x0F, LONG),  # CMD_FlashErase
     ]
+    # BK7231 (tysdk)
+    BASIC_TYSDK = [
+        (0x0E, SHORT),  # CMD_Reboot
+        (0x0F, SHORT),  # CMD_SetBaudRate
+        (0x10, SHORT),  # CMD_CheckCRC
+        (0x06, LONG),  # CMD_FlashWrite
+        (0x07, LONG),  # CMD_FlashWrite4K
+        (0x09, LONG),  # CMD_FlashRead4K
+        (0x0F, LONG),  # CMD_FlashErase
+    ]
     BASIC_DEFAULT = BASIC_105
 
 
 PROTOCOLS = {
     "0x7231c": ProtocolType.FULL,
     "BK7231S_1.0.5": ProtocolType.BASIC_105,
+    "BK7231 tysdk 2018": ProtocolType.BASIC_TYSDK,
 }
 
 
@@ -92,6 +109,13 @@ class BK7231Protocol:
             raise NotImplementedError(
                 f"Not implemented in protocol {self.protocol_type.name}: code={code}, is_long={is_long}"
             )
+
+    def check_protocol(self, code: int, is_long: bool) -> bool:
+        if self.protocol_type == ProtocolType.UNKNOWN:
+            return True
+        pair = (code, is_long)
+        if pair not in self.protocol_type.value:
+            return False
 
     @staticmethod
     def encode(packet: Packet) -> bytes:
@@ -131,8 +155,13 @@ class BK7231Protocol:
         self,
         packet: Packet,
         after_send: Callable = None,
+        support_optional: bool = False,
     ) -> Union[Packet, bool]:
-        self.require_protocol(packet.CODE, packet.IS_LONG)
+        if support_optional:
+            if not self.check_protocol(packet.CODE, packet.IS_LONG):
+                return False
+        else:
+            self.require_protocol(packet.CODE, packet.IS_LONG)
 
         if self.debug_hl:
             print("<- TX:", shorten(str(packet), 64))
