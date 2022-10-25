@@ -37,7 +37,8 @@ Afterwards, hook up the `GND` and `3v3` line to the MCU off the bridge or some o
 Once the devices are connected, invoke `bk7231tools`. For example, to read all internal flash contents (2 MB in size, that's `0x200000` in hex) off a BK7231T device hooked up to `/dev/ttyUSB0` and into the file `dump.bin`, use:
 
 ```sh
-$ bk7231tools read_flash -d /dev/ttyUSB0 -s 0 -l 0x200000 dump.bin
+# the -s and -l arguments are optional and default to the values provided here
+bk7231tools read_flash -d /dev/ttyUSB0 -s 0 -l 0x200000 dump.bin
 ```
 
 The toolset will then attempt to connect to the MCU and perform the requested operation. During the connection attempt process, it may be the case that the device is not reset (in case RTS signal is not hooked up as well). If that's the case, the connection will fail. In order to remedy this issue, manually reset the device by disconnecting its power (but not the UART bridge!) a few times after issuing the command.
@@ -67,15 +68,19 @@ The writing process is optimized to not write empty (all 0xFF) blocks, to speed 
 The tool can also skip certain amount of bytes from the input file (i.e. to skip uploading the bootloader).
 
 ```sh
-# write bootloader only (BK7231N only)
-# start=0, skip=0, length=0x11000
-bk7231tools write_flash -d /dev/ttyUSB0 -s 0 -S 0 -l 0x11000 dump_stock_full_2mb.bin
+# write app firmware (from app-only binary file)
+# start=0x11000, skip=0, length=(entire file)
+bk7231tools write_flash -d /dev/ttyUSB0 -s 0x11000 -S 0 dump_app.bin
 
 # write stock app (from full dump)
 # start=0x11000, skip=0x11000, length=0x121000
 bk7231tools write_flash -d /dev/ttyUSB0 -s 0x11000 -S 0x11000 -l 0x121000 dump_stock_full_2mb.bin
 
-# write app firmware (from app-only binary file)
-# start=0x11000, skip=0, length=entire file
-bk7231tools write_flash -d /dev/ttyUSB0 -s 0x11000 -S 0 dump_app.bin
+# write/restore bootloader only (BK7231N only!!)
+# start=0, skip=0, length=0x11000
+bk7231tools write_flash -d /dev/ttyUSB0 -s 0 -S 0 -l 0x11000 --bootloader dump_stock_full_2mb.bin
+
+# write entire flash dump (BK7231N only!!)
+# start=0, skip=0, length=0x200000
+bk7231tools write_flash -d /dev/ttyUSB0 -s 0 -S 0 -l 0x200000 --bootloader dump_stock_full_2mb.bin
 ```
