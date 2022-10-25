@@ -115,6 +115,8 @@ class BK7231CmdFlash(BK7231CmdChip):
             raise ValueError(f"Starting address 0x{start:X} is not 4K aligned")
         if length & 0xFFF:
             raise ValueError(f"Read length 0x{length:X} is not 4K aligned")
+        if start + length > 0x400000:
+            raise ValueError(f"Read length 0x{length:X} is larger than flash memory size")
         length = int(length // 4096)
 
         for i in range(length):

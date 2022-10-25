@@ -75,6 +75,8 @@ class BK7231Serial(BK7231CmdFlash):
         addr = start
         if start & 0xFFF and not really_erase:
             raise ValueError(f"Start address not on 4K boundary; sector erase needed")
+        if end > 0x400000:
+            raise ValueError(f"Input data is larger than flash memory size")
 
         # unprotect flash memory for BK7231N
         if self.protocol_type == ProtocolType.FULL:

@@ -236,6 +236,10 @@ def read_flash(device: BK7231Serial, args):
     args.start = args.start or 0x000000
     args.length = args.length or 0x200000
 
+    if args.start + args.length > 0x200000:
+        print(f"Reading 0x{args.length:X} bytes at 0x{args.start:X} would go past the flash memory end")
+        exit(1)
+
     print(f"Reading {args.length} bytes from 0x{args.start:X}")
 
     with open(args.file, "wb") as fs:
@@ -265,6 +269,10 @@ def write_flash(device: BK7231Serial, args):
             print("Length is bigger than entire file size")
             exit(1)
         size = args.length
+
+    if args.start + args.length > 0x200000:
+        print(f"Writing 0x{args.length:X} bytes at 0x{args.start:X} would go past the flash memory end")
+        exit(1)
 
     print(f"Writing {size} bytes to 0x{args.start:X}")
 
