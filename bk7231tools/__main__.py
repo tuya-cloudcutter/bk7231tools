@@ -247,6 +247,13 @@ def write_flash(device: BK7231Serial, args):
     args.start = args.start or 0x000000
     args.skip = args.skip or 0x000000
 
+    if args.start < 0x11000 and not args.bootloader:
+        print(f"The start offset you specified (0x{args.start:06X}) will overwrite the bootloader area.")
+        print("If that's really what you want, pass the additional -B/--bootloader flag.")
+        print("This can only be used on BK7231N, otherwise it will probably render the device unusable (and unrecoverable).")
+        print("** Passing the -B flag will not check for chip type **")
+        exit(1)
+
     try:
         size = os.stat(args.file).st_size - args.skip
     except FileNotFoundError:
@@ -353,6 +360,14 @@ def parse_args():
         action="store_true",
         default=False,
         help="Do not verify checksum of written flash segments - not recommended (default: False)",
+    )
+    parser_write_flash.add_argument(
+        "-B",
+        "--bootloader",
+        dest="bootloader",
+        action="store_true",
+        default=False,
+        help="Allow overwriting bootloader area (not recommended on BK7231T)",
     )
     parser_write_flash.set_defaults(handler=write_flash)
     parser_write_flash.set_defaults(device_required=True)
