@@ -234,11 +234,12 @@ def read_flash(device: BK7231Serial, args):
         args.length = args.deprecated_count * 0x1000
 
     args.start = args.start or 0x000000
-    args.length = args.length or 0x200000
 
-    if args.start + args.length > 0x200000:
+    if args.length and args.start + args.length > 0x200000:
         print(f"Reading 0x{args.length:X} bytes at 0x{args.start:X} would go past the flash memory end")
         exit(1)
+
+    args.length = args.length or (0x200000 - args.start)
 
     print(f"Reading {args.length} bytes from 0x{args.start:X}")
 

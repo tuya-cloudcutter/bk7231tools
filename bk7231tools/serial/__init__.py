@@ -117,7 +117,7 @@ class BK7231Serial(BK7231CmdFlash):
         crc = 0
         while True:
             block = io.read(4096)
-            block_size = len(block)
+            block_size = len(block) if addr < end else 0
             block_empty = not len(block.strip(b"\xff"))
             if not block_size:
                 if crc_check:
