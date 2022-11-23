@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import List
 
 from bk7231tools.analysis import flash, rbl, utils
+from bk7231tools.analysis.storage import TuyaStorage
 from bk7231tools.crypto.code import BekenCodeCipher
 from bk7231tools.serial import BK7231Serial
 
@@ -202,6 +203,22 @@ def dissect_dump_file(args):
         __scan_pattern_find_payload(dumpfile, partition_name=missing, layout=layout,
                                     output_directory=output_directory, extract=args.extract)
 
+    storage = TuyaStorage()
+    print("Storage partition:")
+    pos = storage.load(dumpfile)
+    if pos is None:
+        print("\t- not found!")
+        return
+    if not storage.decrypt():
+        print("\t- failed to decrypt!")
+        return
+    keys = storage.find_all_keys()
+    print(f"\t{pos:#06x}: {storage.length // 1024:d} KiB - {len(keys)} keys")
+    if args.extract:
+        storage.extract_all(output_directory, separate_keys=args.storage)
+    else:
+        print("\n".join(f"\t- '{key}'" for key in keys))
+
 
 def connect_device(device, baudrate, timeout, debug):
     s = BK7231Serial(device, baudrate, timeout, debug_hl=debug)
@@ -389,6 +406,8 @@ def parse_args():
                                      help="Extract identified RBL containers instead of outputting information only (default: False)")
     parser_dissect_dump.add_argument("--rbl", action="store_true", default=False,
                                      help="Extract the RBL container instead of just its payload (default: False)")
+    parser_dissect_dump.add_argument("--storage", action="store_true", default=False,
+                                     help="Extract storage keys into separate files (default: False)")
     parser_dissect_dump.set_defaults(handler=dissect_dump_file)
     parser_dissect_dump.set_defaults(device_required=False)
 
