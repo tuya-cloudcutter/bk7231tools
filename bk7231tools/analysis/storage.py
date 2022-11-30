@@ -2,6 +2,7 @@
 
 import json
 import os
+import re
 from json import JSONDecodeError
 from pathlib import Path
 from struct import unpack
@@ -151,10 +152,10 @@ class TuyaStorage:
                 pass
             # Tuya's weird JSON
             if name == "user_param_key":
-                value = value[1:-1]
-                value = value.split(",")
-                value = [item.partition(":") for item in value if item]
-                value = {k: int(v) if v.isnumeric() else v for k, _, v in value}
+                value = re.sub(r"([^{}\[\]:,]+)", r'"\1"', value)
+                value = re.sub(r'"([1-9][0-9]*)"', r"\1", value)
+                value = re.sub(",}", "}", value)
+                value = json.loads(value)
                 value = dict(sorted(value.items()))
             # else an unknown string
             kv[name] = value
