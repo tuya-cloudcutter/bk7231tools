@@ -153,7 +153,7 @@ class TuyaStorage:
             # Tuya's weird JSON
             if name == "user_param_key":
                 value = re.sub(r"([^{}\[\]:,]+)", r'"\1"', value)
-                value = re.sub(r'"([1-9][0-9]*)"', r"\1", value)
+                value = re.sub(r'"([1-9][0-9]*|0)"', r"\1", value)
                 value = re.sub(",}", "}", value)
                 value = json.loads(value)
                 value = dict(sorted(value.items()))
