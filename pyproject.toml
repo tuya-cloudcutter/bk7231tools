@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "bk7231tools"
-version = "1.1.2"
+version = "1.1.3"
 description = "Tools to interact with and analyze artifacts for BK7231 MCUs"
 authors = ["Khaled Nassar <kmhnassar@gmail.com>"]
 license = "MIT"
