@@ -67,7 +67,7 @@ class BK7231CmdChip(BK7231Protocol):
 
         # try bootloader CRC matching first - only BK7231N and BK7231S seem to respond to BootVersion
         # all known protocols support this command
-        crc = self.read_flash_range_crc(0, 256)
+        crc = self.read_flash_range_crc(0, 256) ^ 0xFFFFFFFF
         if crc in CHIP_BY_CRC:
             self.chip_info = CHIP_BY_CRC[crc]
             default = ProtocolType.BASIC_DEFAULT

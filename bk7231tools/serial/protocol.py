@@ -86,9 +86,10 @@ PROTOCOLS = {
 
 # CRC of first 256 bootloader bytes
 # for chips that don't respond to BootVersion at all
+# NOTE: the values here are RAW, as received from the chip. They need to be XOR'ed to represent the real CRC.
 CHIP_BY_CRC = {
     # bl_bk7231q_6AFA.bin
-    0xF0231EF6: "BK7231QN40",
+    0x0FDCE109: "BK7231QN40",
     # bl_bk7252_0.1.3_F4D3.bin
     0xC6064AF3: "BK7252",
 }
