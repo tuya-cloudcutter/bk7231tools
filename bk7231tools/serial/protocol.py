@@ -19,12 +19,6 @@ SHORT = 0
 LONG = 1
 
 
-CHIP_BY_CRC = {
-    # bl_bk7231_qn40_8485.bin
-    0xF0231EF6: "BK7231 tysdk 2018",
-}
-
-
 class ProtocolType(Enum):
     UNKNOWN = []
     # BK7231N BootROM protocol
@@ -47,8 +41,7 @@ class ProtocolType(Enum):
         (0x0E, LONG),  # CMD_FlashGetMID
         (0x0F, LONG),  # CMD_FlashErase
     ]
-    # BK7231S_1.0.5
-    BASIC_105 = [
+    BASIC_TUYA = [
         (0x0E, SHORT),  # CMD_Reboot
         (0x0F, SHORT),  # CMD_SetBaudRate
         (0x10, SHORT),  # CMD_CheckCRC
@@ -58,8 +51,7 @@ class ProtocolType(Enum):
         (0x09, LONG),  # CMD_FlashRead4K
         (0x0F, LONG),  # CMD_FlashErase
     ]
-    # BK7231 (tysdk)
-    BASIC_TYSDK = [
+    BASIC_BEKEN = [
         (0x0E, SHORT),  # CMD_Reboot
         (0x0F, SHORT),  # CMD_SetBaudRate
         (0x10, SHORT),  # CMD_CheckCRC
@@ -68,13 +60,37 @@ class ProtocolType(Enum):
         (0x09, LONG),  # CMD_FlashRead4K
         (0x0F, LONG),  # CMD_FlashErase
     ]
-    BASIC_DEFAULT = BASIC_105
+    BASIC_DEFAULT = BASIC_TUYA
 
 
+# list of protocols with verified command support
+# those not listed here will use BASIC_DEFAULT
 PROTOCOLS = {
+    # 863F_bk7231n_rom.bin
     "0x7231c": ProtocolType.FULL,
-    "BK7231S_1.0.5": ProtocolType.BASIC_105,
-    "BK7231 tysdk 2018": ProtocolType.BASIC_TYSDK,
+    # bl_bk7231s_1.0.1_79A6.bin
+    "BK7231S_1.0.1": ProtocolType.BASIC_TUYA,
+    # bl_bk7231s_1.0.3_DAAE.bin
+    "BK7231S_1.0.3": ProtocolType.BASIC_TUYA,
+    # bl_bk7231s_1.0.4_9940.bin
+    "BK7231S_1.0.4": ProtocolType.BASIC_TUYA,
+    # bl_bk7231s_1.0.5_4FF7.bin
+    "BK7231S_1.0.5": ProtocolType.BASIC_TUYA,
+    # bl_bk7231s_1.0.6_625D.bin
+    "BK7231S_1.0.6": ProtocolType.BASIC_TUYA,
+    # bl_bk7231q_6AFA.bin
+    "BK7231QN40": ProtocolType.BASIC_BEKEN,
+    # bl_bk7252_0.1.3_F4D3.bin
+    "BK7252": ProtocolType.BASIC_BEKEN,
+}
+
+# CRC of first 256 bootloader bytes
+# for chips that don't respond to BootVersion at all
+CHIP_BY_CRC = {
+    # bl_bk7231q_6AFA.bin
+    0xF0231EF6: "BK7231QN40",
+    # bl_bk7252_0.1.3_F4D3.bin
+    0xC6064AF3: "BK7252",
 }
 
 

@@ -1,6 +1,5 @@
 # Copyright (c) Kuba Szczodrzyński 2022-07-06.
 
-from io import BytesIO
 from typing import Generator, Tuple
 
 from .cmd_chip import BK7231CmdChip
@@ -116,7 +115,9 @@ class BK7231CmdFlash(BK7231CmdChip):
         if length & 0xFFF:
             raise ValueError(f"Read length 0x{length:X} is not 4K aligned")
         if start + length > 0x400000:
-            raise ValueError(f"Read length 0x{length:X} is larger than flash memory size")
+            raise ValueError(
+                f"Read length 0x{length:X} is larger than flash memory size"
+            )
         length = int(length // 4096)
 
         for i in range(length):

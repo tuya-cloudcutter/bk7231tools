@@ -65,7 +65,8 @@ class BK7231CmdChip(BK7231Protocol):
         if self.chip_info:
             return self.chip_info
 
-        # try bootloader CRC matching first - BK7231 (tysdk) doesn't respond to BootVersion
+        # try bootloader CRC matching first - only BK7231N and BK7231S seem to respond to BootVersion
+        # all known protocols support this command
         crc = self.read_flash_range_crc(0, 256)
         if crc in CHIP_BY_CRC:
             self.chip_info = CHIP_BY_CRC[crc]
@@ -77,6 +78,7 @@ class BK7231CmdChip(BK7231Protocol):
         command = BkBootVersionCmnd()
         response: BkBootVersionResp = self.command(command, support_optional=True)
         if not response:
+            # BootVersion not supported (got no error response as well)
             return self.chip_info
 
         if response.version == b"\x07":
@@ -88,6 +90,8 @@ class BK7231CmdChip(BK7231Protocol):
             self.chip_info = response.version.decode().strip("\x00\x20")
             default = ProtocolType.BASIC_DEFAULT
 
+        # get protocol by chip info or SCTRL_CHIP_ID
+        # if not set, use `default`
         self.protocol_type = PROTOCOLS.get(self.chip_info, default)
         return self.chip_info
 
