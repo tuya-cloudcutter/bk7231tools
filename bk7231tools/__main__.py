@@ -1,6 +1,7 @@
 import argparse
 import base64
 import io
+import json
 import os
 import sys
 import traceback
@@ -62,6 +63,7 @@ def __decrypt_code_partition(partition: flash.FlashPartition, payload: bytes):
 
 def __carve_and_write_rbl_containers(dumpfile: str, layout: flash.FlashLayout, output_directory: str, extract: bool = False, with_rbl: bool = False) -> List[rbl.Container]:
     containers = []
+    app_code = None
     with open(dumpfile, "rb") as fs:
         indices = rbl.find_rbl_containers_indices(fs)
         if indices:
@@ -95,12 +97,15 @@ def __carve_and_write_rbl_containers(dumpfile: str, layout: flash.FlashLayout, o
                             decryptedpath = __generate_payload_output_file_path(
                                 dumpfile=dumpfile, payload_name=container.header.name, output_directory=output_directory, extra_tag=extra_tag)
                             with open(decryptedpath, "wb") as fsout:
-                                fsout.write(__decrypt_code_partition(partition, container.payload))
+                                code = __decrypt_code_partition(partition, container.payload)
+                                fsout.write(code)
+                            if container.header.name == "app":
+                                app_code = code
 
                             print(f"\t\textracted to {output_directory}")
                     else:
                         print(f"{container.header.name} - INVALID PAYLOAD")
-    return containers
+    return containers, app_code
 
 
 def __scan_pattern_find_payload(dumpfile: str, partition_name: str, layout: flash.FlashLayout, output_directory: str, extract: bool = False):
@@ -161,6 +166,7 @@ def __scan_pattern_find_payload(dumpfile: str, partition_name: str, layout: flas
 
         final_payload_data = final_payload.getbuffer()
 
+    app_code = None
     if final_payload_data is not None:
         print(f"\t{partition.start_address:#x}: {partition.name} - [NO RBL, size={len(final_payload_data):#x}]")
         if extract:
@@ -173,11 +179,15 @@ def __scan_pattern_find_payload(dumpfile: str, partition_name: str, layout: flas
             extra_tag = "pattern_scan_decrypted"
             decryptedpath = __generate_payload_output_file_path(dumpfile, payload_name=partition_name,
                                                                 output_directory=output_directory, extra_tag=extra_tag)
+            final_payload_data = __decrypt_code_partition(partition, final_payload_data)
             with open(decryptedpath, "wb") as fs:
-                fs.write(__decrypt_code_partition(partition, final_payload_data))
+                code = __decrypt_code_partition(partition, final_payload_data)
+                fs.write(code)
+            if partition_name == "app":
+                app_code = code
             print(f"\t\textracted to {output_directory}")
 
-    return final_payload_data
+    return final_payload_data, app_code
 
 
 def dissect_dump_file(args):
@@ -194,30 +204,62 @@ def dissect_dump_file(args):
     if args.extract:
         output_directory = __ensure_output_dir_exists(output_directory)
 
-    containers = __carve_and_write_rbl_containers(dumpfile=dumpfile, layout=layout,
+    containers, app_code = __carve_and_write_rbl_containers(dumpfile=dumpfile, layout=layout,
                                                   output_directory=output_directory, extract=args.extract, with_rbl=args.rbl)
     container_names = {container.header.name for container in containers if container.payload is not None}
     missing_rbl_containers = {part.name for part in layout.partitions} - container_names
     for missing in missing_rbl_containers:
         print(f"Missing {missing} RBL container. Using a scan pattern instead")
-        __scan_pattern_find_payload(dumpfile, partition_name=missing, layout=layout,
+        _, code = __scan_pattern_find_payload(dumpfile, partition_name=missing, layout=layout,
                                     output_directory=output_directory, extract=args.extract)
+        if missing == "app" and not app_code:
+            app_code = code
 
-    storage = TuyaStorage()
-    print("Storage partition:")
-    pos = storage.load(dumpfile)
-    if pos is None:
-        print("\t- not found!")
-        return
-    if not storage.decrypt():
-        print("\t- failed to decrypt!")
-        return
-    keys = storage.find_all_keys()
-    print(f"\t{pos:#06x}: {storage.length // 1024:d} KiB - {len(keys)} keys")
-    if args.extract:
-        storage.extract_all(output_directory, separate_keys=args.storage)
-    else:
+    keys = []
+    while True:
+        storage = TuyaStorage()
+        print("Storage partition:")
+        pos = storage.load(dumpfile)
+        if pos is None:
+            print("\t- not found!")
+            break
+        if not storage.decrypt():
+            print("\t- failed to decrypt!")
+            break
+        keys = storage.find_all_keys()
+        print(f"\t{pos:#06x}: {storage.length // 1024:d} KiB - {len(keys)} keys")
         print("\n".join(f"\t- '{key}'" for key in keys))
+        if args.extract:
+            storage.extract_all(output_directory, separate_keys=args.storage)
+        break
+
+    if not args.extract:
+        # no more work to do, upk can't be searched without app code
+        return
+
+    upk = None
+    while "user_param_key" in keys:
+        print("Storage area `user_param_key`:")
+        kv = storage.read_all_keys()
+        upk = kv["user_param_key"]
+        break
+
+    while "user_param_key" not in keys:
+        print("App code `user_param_key`:")
+        if not app_code:
+            print("\t- no app code, aborting!")
+            break
+        upk = TuyaStorage.find_user_param_key(app_code)
+        if not upk:
+            print("\t- not found!")
+        break
+
+    if upk is not None:
+        dumpfile_name = Path(dumpfile).stem
+        out_name = os.path.join(output_directory, f"{dumpfile_name}_user_param_key.json")
+        with open(out_name, "w") as f:
+            print(f"\t- found! Extracted to {out_name}")
+            json.dump(upk, f, indent="\t")
 
 
 def connect_device(device, baudrate, timeout, debug):

@@ -85,6 +85,32 @@ class TuyaStorage:
             key[i] = (key[i] + inner_key[i]) % 256
         return bytes(key)
 
+    @staticmethod
+    def parse_user_param_key(value: str) -> dict:
+        value = re.sub(r"([^{}\[\]:,]+)", r'"\1"', value)
+        value = re.sub(r'"([1-9][0-9]*|0)"', r"\1", value)
+        value = re.sub(",}", "}", value)
+        try:
+            value = json.loads(value)
+        except Exception:
+            return None
+        value = dict(sorted(value.items()))
+        return value
+
+    @staticmethod
+    def find_user_param_key(data: bytes) -> dict:
+        pos = data.find(b",crc:")
+        if pos == -1:
+            return None
+        start = data.rfind(b"\x00", 0, pos) + 1
+        if not start:
+            return None
+        end = data.find(b"\x00", start)
+        if end == -1:
+            return None
+        upk = data[start:end].decode()
+        return TuyaStorage.parse_user_param_key(upk)
+
     def load(self, file: str) -> int:
         self.dumpfile = file
         magic = bytes.fromhex(KEY_MAGIC) * 4
@@ -152,11 +178,7 @@ class TuyaStorage:
                 pass
             # Tuya's weird JSON
             if name == "user_param_key":
-                value = re.sub(r"([^{}\[\]:,]+)", r'"\1"', value)
-                value = re.sub(r'"([1-9][0-9]*|0)"', r"\1", value)
-                value = re.sub(",}", "}", value)
-                value = json.loads(value)
-                value = dict(sorted(value.items()))
+                value = self.parse_user_param_key(value)
             # else an unknown string
             kv[name] = value
         return kv
