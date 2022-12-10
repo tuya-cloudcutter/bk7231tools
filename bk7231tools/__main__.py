@@ -205,13 +205,13 @@ def dissect_dump_file(args):
         output_directory = __ensure_output_dir_exists(output_directory)
 
     containers, app_code = __carve_and_write_rbl_containers(dumpfile=dumpfile, layout=layout,
-                                                  output_directory=output_directory, extract=args.extract, with_rbl=args.rbl)
+                                                            output_directory=output_directory, extract=args.extract, with_rbl=args.rbl)
     container_names = {container.header.name for container in containers if container.payload is not None}
     missing_rbl_containers = {part.name for part in layout.partitions} - container_names
     for missing in missing_rbl_containers:
         print(f"Missing {missing} RBL container. Using a scan pattern instead")
         _, code = __scan_pattern_find_payload(dumpfile, partition_name=missing, layout=layout,
-                                    output_directory=output_directory, extract=args.extract)
+                                              output_directory=output_directory, extract=args.extract)
         if missing == "app" and not app_code:
             app_code = code
 
