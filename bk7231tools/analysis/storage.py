@@ -99,7 +99,14 @@ class TuyaStorage:
 
     @staticmethod
     def find_user_param_key(data: bytes) -> dict:
-        pos = data.find(b",crc:")
+        patterns = [b",crc:", b",module:", b"Jsonver:"]
+        pos = -1
+        for pattern in patterns:
+            pos = data.find(pattern)
+            if pos != -1 and data[pos + len(pattern)] != 0x00:
+                break
+            else:
+                pos = -1
         if pos == -1:
             return None
         start = data.rfind(b"\x00", 0, pos) + 1
