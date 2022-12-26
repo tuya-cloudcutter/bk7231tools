@@ -1,6 +1,6 @@
 from binascii import crc32
 from io import BytesIO
-from typing import Generator, IO
+from typing import IO, Generator
 
 from serial import Serial
 
