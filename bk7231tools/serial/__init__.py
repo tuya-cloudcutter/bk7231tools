@@ -1,6 +1,6 @@
 from binascii import crc32
 from io import BytesIO
-from typing import IO
+from typing import Generator, IO
 
 from serial import Serial
 
@@ -71,7 +71,7 @@ class BK7231Serial(BK7231CmdFlash):
         crc_check: bool = False,
         really_erase: bool = False,
         dry_run: bool = False,
-    ) -> bool:
+    ) -> Generator[int, None, None]:
         start = fix_addr(start)
         end = start + io_size
         addr = start
@@ -103,12 +103,13 @@ class BK7231Serial(BK7231CmdFlash):
                 block_size = len(block)
                 if not block_size:
                     # writing finished
-                    return True
+                    return
                 self.flash_write_bytes(
                     addr,
                     block,
                     dry_run=dry_run,
                 )
+                yield len(block)
                 addr += block_size
 
         assert (addr & 0xFFF) == 0
@@ -133,7 +134,7 @@ class BK7231Serial(BK7231CmdFlash):
                             f"Chip CRC value {crc_chip:X} does not match calculated CRC value {crc:X}"
                         )
                 self.info("OK!")
-                return True
+                return
             # print progress info
             progress = 100.0 - (end - addr) / io_size * 100.0
             if block_empty:
@@ -154,6 +155,7 @@ class BK7231Serial(BK7231CmdFlash):
                     block,
                     dry_run=dry_run,
                 )
+            yield len(block)
             addr += block_size
 
 
