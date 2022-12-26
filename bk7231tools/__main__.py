@@ -342,13 +342,14 @@ def write_flash(device: BK7231Serial, args):
 
     with open(args.file, "rb") as fs:
         fs.seek(args.skip, os.SEEK_SET)
-        device.program_flash(
+        for _ in device.program_flash(
             io=fs,
             io_size=size,
             start=args.start,
             crc_check=not args.no_verify_checksum,
             dry_run=False,
-        )
+        ):
+            pass
 
 
 def parse_args():
