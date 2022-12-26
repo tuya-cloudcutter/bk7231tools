@@ -97,14 +97,22 @@ CHIP_BY_CRC = {
 
 class BK7231Protocol:
     serial: Serial
-    debug_hl: bool = False
-    debug_ll: bool = False
+    baudrate: int
+    link_timeout: float
+    cmnd_timeout: float
+
     protocol_type: ProtocolType = ProtocolType.UNKNOWN
+
+    warn: Callable = print
+    info: Callable = lambda *args: None
+    debug: Callable = lambda *args: None
+    verbose: Callable = lambda *args: None
 
     def __init__(self, serial: Serial) -> None:
         self.serial = serial
 
     def hw_reset(self):
+        # reset the chip using RTS and DTR lines
         self.serial.rts = True
         self.serial.dtr = True
         sleep(0.1)
@@ -149,8 +157,8 @@ class BK7231Protocol:
         return out
 
     def write(self, data: bytes):
-        if data and self.debug_ll:
-            print(f"<- TX: {data.hex(' ')}")
+        if data:
+            self.verbose(f"<- TX: {data.hex(' ')}")
         self.serial.write(data)
         self.serial.flush()
 
@@ -162,8 +170,8 @@ class BK7231Protocol:
         else:
             data = self.serial.read(1)
 
-        if data and self.debug_ll:
-            print(f"-> RX: {data.hex(' ')}")
+        if data:
+            self.verbose(f"-> RX: {data.hex(' ')}")
         if not count and not until:
             return data[0] if data else 0
         return data
@@ -180,8 +188,7 @@ class BK7231Protocol:
         else:
             self.require_protocol(packet.CODE, packet.IS_LONG)
 
-        if self.debug_hl:
-            print("<- TX:", shorten(str(packet), 64))
+        self.debug("<- TX:", shorten(str(packet), 64))
 
         self.write(self.encode(packet))
         if after_send:
@@ -232,16 +239,14 @@ class BK7231Protocol:
             check_len = part.stop - part.start
             if response[part] != command[:check_len]:
                 raise ValueError("Invalid response data payload")
-            if self.debug_hl:
-                print(f"-> RX ({size}): Check OK")
+            self.debug(f"-> RX ({size}): Check OK")
 
         if packet.HAS_RESP_OTHER:
             try:
                 response = cls.deserialize(response)
             except struct.error:
                 raise ValueError(f"Partial response received: {response.hex(' ', -1)}")
-            if self.debug_hl:
-                print(f"-> RX ({size}):", shorten(str(response), 64))
+            self.debug(f"-> RX ({size}):", shorten(str(response), 64))
             return response
 
         return True

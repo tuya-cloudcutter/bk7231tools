@@ -17,26 +17,29 @@ class BK7231Serial(BK7231CmdFlash):
         baudrate: int = 115200,
         link_timeout: float = 10.0,
         cmnd_timeout: float = 1.0,
-        debug_hl: bool = False,
-        debug_ll: bool = False,
+        link_baudrate: int = 115200,
+        **kwargs,
     ) -> None:
-        super().__init__(
-            serial=Serial(
-                port=port,
-                baudrate=115200,
-                timeout=cmnd_timeout,
-            ),
+        self.serial = Serial(
+            port=port,
+            baudrate=link_baudrate,
+            timeout=cmnd_timeout,
         )
-        self.debug_hl = debug_hl
-        self.debug_ll = debug_ll
-        # reset the chip using RTS line
-        self.hw_reset()
+        self.baudrate = baudrate
+        self.link_timeout = link_timeout
+        self.cmnd_timeout = cmnd_timeout
+        if kwargs.get("debug_hl", False):
+            self.debug = print
+        if kwargs.get("debug_ll", False):
+            self.verbose = print
+
+    def connect(self):
         # try to communicate
-        if not self.wait_for_link(link_timeout):
+        if not self.wait_for_link(self.link_timeout):
             raise TimeoutError("Timed out attempting to link with chip")
         # update the transmission baudrate
-        if self.serial.baudrate != baudrate:
-            self.set_baudrate(baudrate)
+        if self.serial.baudrate != self.baudrate:
+            self.set_baudrate(self.baudrate)
         # read and save chip info
         self.read_chip_info()
         try:
@@ -65,7 +68,6 @@ class BK7231Serial(BK7231CmdFlash):
         io: IO[bytes],
         io_size: int,
         start: int,
-        verbose: bool = True,
         crc_check: bool = False,
         really_erase: bool = False,
         dry_run: bool = False,
@@ -80,14 +82,12 @@ class BK7231Serial(BK7231CmdFlash):
 
         # unprotect flash memory for BK7231N
         if self.protocol_type == ProtocolType.FULL:
-            if verbose:
-                print("Trying to unprotect flash memory...")
+            self.info("Trying to unprotect flash memory...")
             self.flash_unprotect()
 
         # start is NOT on sector boundary
         if addr & 0xFFF:
-            if verbose:
-                print("Writing unaligned data...")
+            self.info("Writing unaligned data...")
             # erase sector containing data start
             sector_addr = addr & 0x1FF000
             self.flash_erase_block(
@@ -121,8 +121,7 @@ class BK7231Serial(BK7231CmdFlash):
             block_empty = not len(block.strip(b"\xff"))
             if not block_size:
                 if crc_check:
-                    if verbose:
-                        print("Verifying CRC")
+                    self.info("Verifying CRC")
                     pad_size = (4096 - (io_size % 4096)) % 4096
                     crc = crc32(b"\xff" * pad_size, crc)
                     crc_chip = self.read_flash_range_crc(
@@ -133,16 +132,14 @@ class BK7231Serial(BK7231CmdFlash):
                         raise ValueError(
                             f"Chip CRC value {crc_chip:X} does not match calculated CRC value {crc:X}"
                         )
-                if verbose:
-                    print("OK!")
+                self.info("OK!")
                 return True
             # print progress info
-            if verbose:
-                progress = 100.0 - (end - addr) / io_size * 100.0
-                if block_empty:
-                    print(f"Erasing at 0x{addr:X} ({progress:.2f}%)")
-                else:
-                    print(f"Erasing and writing at 0x{addr:X} ({progress:.2f}%)")
+            progress = 100.0 - (end - addr) / io_size * 100.0
+            if block_empty:
+                self.info(f"Erasing at 0x{addr:X} ({progress:.2f}%)")
+            else:
+                self.info(f"Erasing and writing at 0x{addr:X} ({progress:.2f}%)")
             # compute CRC32
             crc = crc32(block, crc)
             self.flash_erase_block(

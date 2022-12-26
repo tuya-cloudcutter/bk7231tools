@@ -74,7 +74,7 @@ class BK7231CmdFlash(BK7231CmdChip):
         if len(data) > 256:
             raise ValueError(f"Data too long ({len(data)} > 256)")
         if dry_run:
-            print(f" -> would write {len(data)} bytes to 0x{start:X}")
+            self.info(f" -> would write {len(data)} bytes to 0x{start:X}")
             return True
         command = BkFlashWriteCmnd(start, data)
         response: BkFlashWriteResp = self.command(command)
@@ -96,7 +96,7 @@ class BK7231CmdFlash(BK7231CmdChip):
         if len(data) < 4096:
             data += (4096 - len(data)) * b"\xff"
         if dry_run:
-            print(f" -> would write {len(data)} bytes to 0x{start:X}")
+            self.info(f" -> would write {len(data)} bytes to 0x{start:X}")
             return True
         command = BkFlashWrite4KCmnd(start, data)
         self.command(command)
@@ -123,7 +123,7 @@ class BK7231CmdFlash(BK7231CmdChip):
         for i in range(length):
             addr = start + i * 4096
             progress = i / length * 100.0
-            print(f"Reading 4k page at 0x{addr:06X} ({progress:.2f}%)")
+            self.info(f"Reading 4k page at 0x{addr:06X} ({progress:.2f}%)")
             command = BkFlashRead4KCmnd(addr)
             response: BkFlashRead4KResp = self.command(command)
             if crc_check:
@@ -204,7 +204,7 @@ class BK7231CmdFlash(BK7231CmdChip):
     ):
         start = fix_addr(start)
         if dry_run:
-            print(f" -> would erase {size.name} at 0x{start:X}")
+            self.info(f" -> would erase {size.name} at 0x{start:X}")
             return True
         command = BkFlashEraseBlockCmnd(size, start)
         self.command(command)

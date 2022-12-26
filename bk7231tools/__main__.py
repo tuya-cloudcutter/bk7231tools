@@ -263,7 +263,12 @@ def dissect_dump_file(args):
 
 
 def connect_device(device, baudrate, timeout, debug):
-    s = BK7231Serial(device, baudrate, timeout, debug_hl=debug)
+    s = BK7231Serial(device, baudrate, link_timeout=timeout)
+    if debug:
+        s.debug = print
+    s.info = print
+    s.hw_reset()
+    s.connect()
     items = [
         f"Chip info: {s.chip_info}",
         f"Flash ID: {s.flash_id.hex(' ', -1) if s.flash_id else None}",
@@ -341,7 +346,6 @@ def write_flash(device: BK7231Serial, args):
             io=fs,
             io_size=size,
             start=args.start,
-            verbose=True,
             crc_check=not args.no_verify_checksum,
             dry_run=False,
         )

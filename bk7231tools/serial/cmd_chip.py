@@ -49,8 +49,7 @@ class BK7231CmdChip(BK7231Protocol):
         command = BkSetBaudRateCmnd(baudrate, delay_ms=20)
 
         def baudrate_cb():
-            if self.debug_hl:
-                print("-- UART: Changing port baudrate")
+            self.debug("-- UART: Changing port baudrate")
             sleep(command.delay_ms / 1000 / 2)
             self.serial.baudrate = baudrate
 
@@ -115,8 +114,8 @@ class BK7231CmdChip(BK7231Protocol):
         timeout_current = self.serial.timeout
         timeout_minimum = (end - start) / self.crc_speed_bps
         if timeout_minimum > timeout_current:
-            print(
-                "WARN: The current command timeout of",
+            self.warn(
+                "The current command timeout of",
                 timeout_current,
                 "second(s) is too low for reading",
                 end - start,
