@@ -179,12 +179,11 @@ def __scan_pattern_find_payload(dumpfile: str, partition_name: str, layout: flas
             extra_tag = "pattern_scan_decrypted"
             decryptedpath = __generate_payload_output_file_path(dumpfile, payload_name=partition_name,
                                                                 output_directory=output_directory, extra_tag=extra_tag)
-            final_payload_data = __decrypt_code_partition(partition, final_payload_data)
+            decrypted_final_payload_data = __decrypt_code_partition(partition, final_payload_data)
             with open(decryptedpath, "wb") as fs:
-                code = __decrypt_code_partition(partition, final_payload_data)
-                fs.write(code)
+                fs.write(decrypted_final_payload_data)
             if partition_name == "app":
-                app_code = code
+                app_code = decrypted_final_payload_data
             print(f"\t\textracted to {output_directory}")
 
     return final_payload_data, app_code
