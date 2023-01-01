@@ -176,7 +176,7 @@ class TuyaStorage:
             value = self.sf_read_from_index(index)
             if not value:
                 continue
-            value = value.rstrip(b"\x00").decode()
+            value = value.rstrip(b"\x00").decode(errors="replace")
             # standard JSON
             try:
                 kv[name] = json.loads(value)
