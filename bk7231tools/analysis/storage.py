@@ -102,11 +102,15 @@ class TuyaStorage:
         patterns = [b",crc:", b",module:", b"Jsonver:"]
         pos = -1
         for pattern in patterns:
-            pos = data.find(pattern)
-            if pos != -1 and data[pos + len(pattern)] != 0x00:
+            match_found = False
+            pos = data.find(pattern, 0)
+            while pos != -1:
+                if data[pos + len(pattern)] != 0x00:
+                    match_found = True
+                    break
+                pos = data.find(pattern, pos + 1)
+            if match_found:
                 break
-            else:
-                pos = -1
         if pos == -1:
             return None
         start = data.rfind(b"\x00", 0, pos) + 1
