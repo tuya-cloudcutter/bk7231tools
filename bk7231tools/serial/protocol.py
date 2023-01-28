@@ -232,6 +232,8 @@ class BK7231Protocol:
                 break
 
         response = self.read(count=size)
+        if size != len(response):
+            raise ValueError(f"Incomplete response read: {len(response)} != {size}")
 
         if packet.HAS_RESP_SAME:
             command = packet.serialize()

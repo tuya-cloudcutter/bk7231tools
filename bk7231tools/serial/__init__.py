@@ -25,6 +25,7 @@ class BK7231Serial(BK7231CmdFlash):
             baudrate=link_baudrate,
             timeout=cmnd_timeout,
         )
+        self.serial.set_buffer_size(rx_size=8192)
         self.baudrate = baudrate
         self.link_timeout = link_timeout
         self.cmnd_timeout = cmnd_timeout
