@@ -7,8 +7,10 @@ This is a collection of tools to interact with and analyze artifacts for BK7231 
 ## Installation
 Install the package from PyPI:
 ```
-pip install bk7231tools
+pip install bk7231tools[cli]
 ```
+
+The `[cli]` extras will include PyCryptodomex, required for Tuya Storage extraction.
 
 ## ⚠️ WARNING⚠️
 Please be aware that this software is provided without any guarantees from the authors. If you will still use it, then please be aware that:

@@ -8,8 +8,6 @@ from pathlib import Path
 from struct import unpack
 from typing import List
 
-from Cryptodome.Cipher import AES
-
 from .goto import with_goto
 
 KEY_MASTER = b"qwertyuiopasdfgh"
@@ -150,6 +148,14 @@ class TuyaStorage:
         return self.block(ib + 1)[ip * self.page_sz: ip * self.page_sz + size]
 
     def decrypt(self) -> bool:
+        try:
+            from Cryptodome.Cipher import AES
+        except (ImportError, ModuleNotFoundError):
+            raise ImportError(
+                "PyCryptodomex dependency is required for storage decryption. "
+                "Install it with: pip install pycryptodomex"
+            )
+
         aes = AES.new(KEY_MASTER, AES.MODE_ECB)
         master = self.block(0, aes.decrypt(self.block(0)))
         magic, crc, key = unpack("<II16s", master[0:24])

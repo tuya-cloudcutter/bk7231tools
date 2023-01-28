@@ -214,6 +214,13 @@ def dissect_dump_file(args):
         if missing == "app" and not app_code:
             app_code = code
 
+    try:
+        import Cryptodome
+    except (ImportError, ModuleNotFoundError):
+        print("NOTE: skipping storage decryption because of missing PyCryptodomex dependency.")
+        print("      Install using 'pip install bk7231tools[cli]' to add the dependency.")
+        return
+
     keys = []
     while True:
         storage = TuyaStorage()

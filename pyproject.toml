@@ -8,7 +8,10 @@ license = "MIT"
 [tool.poetry.dependencies]
 python = "^3.7"
 pyserial = "^3.5"
-pycryptodomex = "^3.16.0"
+pycryptodomex = {version = "^3.16.0", optional = true}
+
+[tool.poetry.extras]
+cli = ["pycryptodomex"]
 
 [tool.poetry.dev-dependencies]
 autopep8 = "^1.7.0"
