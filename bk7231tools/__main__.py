@@ -10,7 +10,6 @@ from pathlib import Path
 from typing import List
 
 from bk7231tools.analysis import flash, rbl, utils
-from bk7231tools.analysis.storage import TuyaStorage
 from bk7231tools.crypto.code import BekenCodeCipher
 from bk7231tools.serial import BK7231Serial
 
@@ -219,6 +218,12 @@ def dissect_dump_file(args):
     except (ImportError, ModuleNotFoundError):
         print("NOTE: skipping storage decryption because of missing PyCryptodomex dependency.")
         print("      Install using 'pip install bk7231tools[cli]' to add the dependency.")
+        return
+    try:
+        from bk7231tools.analysis.storage import TuyaStorage
+    except SyntaxError:
+        print("NOTE: skipping storage decryption because of incompatible Python version.")
+        print("      Install Python 3.10 or newer and try again.")
         return
 
     keys = []
