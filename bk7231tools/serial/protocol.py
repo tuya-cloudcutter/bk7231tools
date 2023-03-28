@@ -116,8 +116,9 @@ class BK7231Protocol:
         self.serial.rts = True
         self.serial.dtr = True
         sleep(0.1)
-        self.serial.rts = False
         self.serial.dtr = False
+        sleep(0.1)
+        self.serial.rts = False
 
     def drain(self):
         tm_prev = self.serial.timeout
