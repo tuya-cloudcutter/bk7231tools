@@ -62,6 +62,7 @@ class BK7231CmdFlash(BK7231CmdChip):
     }
 
     flash_id: bytes = None
+    retries: int = 20
 
     def flash_write_bytes(
         self,
@@ -124,10 +125,15 @@ class BK7231CmdFlash(BK7231CmdChip):
             addr = start + i * 4096
             progress = i / length * 100.0
             self.info(f"Reading 4k page at 0x{addr:06X} ({progress:.2f}%)")
-            command = BkFlashRead4KCmnd(addr)
-            response: BkFlashRead4KResp = self.command(command)
-            if crc_check:
-                self.check_crc(addr, response.data)
+            for j in range(self.retries):
+                try:
+                    command = BkFlashRead4KCmnd(addr)
+                    response: BkFlashRead4KResp = self.command(command)
+                    if crc_check:
+                        self.check_crc(addr, response.data)
+                    break
+                except ValueError as e:
+                    self.warn(f"Reading failure ({e}), retrying (attempt {j})")
             yield response.data
 
     def flash_read_reg8(self, cmd: int) -> int:
