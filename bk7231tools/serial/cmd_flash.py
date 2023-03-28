@@ -62,7 +62,7 @@ class BK7231CmdFlash(BK7231CmdChip):
     }
 
     flash_id: bytes = None
-    retries : int = 20
+    retries: int = 20
 
     def flash_write_bytes(
         self,
@@ -132,8 +132,8 @@ class BK7231CmdFlash(BK7231CmdChip):
                     if crc_check:
                         self.check_crc(addr, response.data)
                     break
-                except ValueError as ve:
-                    self.warn(f"Reading failure ({str(ve)}), retrying (attempt {j})")
+                except ValueError as e:
+                    self.warn(f"Reading failure ({e}), retrying (attempt {j})")
             yield response.data
 
     def flash_read_reg8(self, cmd: int) -> int:
