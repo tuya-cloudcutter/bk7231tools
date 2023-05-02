@@ -32,9 +32,10 @@ def check_crc(crc_read: int, data: bytearray) -> bool:
     return True
 
 
-def check_magic(expected: int, found: int) -> bool:
-    if expected != found:
-        print(f"\t- invalid magic: expected {expected:08x}, found {found:08x}")
+def check_magic(found: int, *expected: int) -> bool:
+    if found not in expected:
+        expected = [f"{e:08x}" for e in expected]
+        print(f"\t- invalid magic: expected {expected}, found {found:08x}")
         return False
     return True
 
@@ -130,22 +131,26 @@ class TuyaStorage:
             pos -= 32  # rewind to block start
         except ValueError:
             return None
-        self.data = filedata[pos: pos + self.flash_sz + self.swap_flash_sz]
+        self.data = filedata[pos : pos + self.flash_sz + self.swap_flash_sz]
         self.data = bytearray(self.data)
         if len(self.data) != self.flash_sz + self.swap_flash_sz:
             return None
         return pos
 
+    def save(self, file: str):
+        with open(file, "wb") as f:
+            f.write(self.data)
+
     def block(self, i: int, new: bytearray = None) -> bytearray:
         if new:
-            self.data[i * self.block_sz: (i + 1) * self.block_sz] = new
+            self.data[i * self.block_sz : (i + 1) * self.block_sz] = new
             return new
-        return self.data[i * self.block_sz: (i + 1) * self.block_sz]
+        return self.data[i * self.block_sz : (i + 1) * self.block_sz]
 
     def page(self, ib: int, ip: int, size: int = 0) -> bytearray:
         if not size:
             size = self.page_sz
-        return self.block(ib + 1)[ip * self.page_sz: ip * self.page_sz + size]
+        return self.block(ib + 1)[ip * self.page_sz : ip * self.page_sz + size]
 
     def decrypt(self) -> bool:
         try:
@@ -159,7 +164,7 @@ class TuyaStorage:
         aes = AES.new(KEY_MASTER, AES.MODE_ECB)
         master = self.block(0, aes.decrypt(self.block(0)))
         magic, crc, key = unpack("<II16s", master[0:24])
-        if not check_magic(0x13579753, magic):
+        if not check_magic(magic, 0x13579753):
             return False
         if not check_crc(crc, key):
             return False
@@ -169,7 +174,7 @@ class TuyaStorage:
         for i in range(self.block_nums):
             block = self.block(i + 1, aes.decrypt(self.block(i + 1)))
             magic, crc, _ = unpack("<IIH", block[0:10])
-            if not check_magic(0x98761234, magic):
+            if not check_magic(magic, 0x98761234, 0x135726AB):
                 return False
             if not check_crc(crc, block[8:]):
                 return False
@@ -226,14 +231,14 @@ class TuyaStorage:
                     break
                 data_len = idx["data_len"]
                 if read + self.page_sz > data_len:
-                    buf[read: read + data_len - read] = self.page(
+                    buf[read : read + data_len - read] = self.page(
                         ib=element["block_id"],
                         ip=k,
                         size=data_len - read,
                     )
                     read = idx["data_len"]
                     break
-                buf[read: read + self.page_sz] = self.page(
+                buf[read : read + self.page_sz] = self.page(
                     ib=element["block_id"],
                     ip=k,
                 )
@@ -241,7 +246,7 @@ class TuyaStorage:
                 read += self.page_sz
             i += 1
 
-        if not check_crc(idx["crc32"], buf[0: idx["data_len"]]):
+        if not check_crc(idx["crc32"], buf[0 : idx["data_len"]]):
             return None
         return buf
 
@@ -298,7 +303,7 @@ class TuyaStorage:
         v4s = unpack("<IIHBHIB", v4[0:18])
         elements = []
         for i in range(v4s[4]):
-            element = unpack("<HBB", v4[start + i * 4: start + i * 4 + 4])
+            element = unpack("<HBB", v4[start + i * 4 : start + i * 4 + 4])
             element = dict(
                 block_id=element[0],
                 start_page_id=element[1],
@@ -313,7 +318,7 @@ class TuyaStorage:
             element_num=v4s[4],
             elements=elements,
             name_len=v4s[6],
-            name=v4[18: 18 + v4s[6]].rstrip(b"\x00").decode(),
+            name=v4[18 : 18 + v4s[6]].rstrip(b"\x00").decode(),
         )
         self.indexes[idx["name"]] = idx
         return 0, idx

@@ -242,6 +242,13 @@ def dissect_dump_file(args):
         print("\n".join(f"\t- '{key}'" for key in keys))
         if args.extract:
             storage.extract_all(output_directory, separate_keys=args.storage)
+            filepath = __generate_payload_output_file_path(
+                dumpfile=dumpfile,
+                payload_name="storage",
+                output_directory=output_directory,
+                extra_tag="decrypted",
+            )
+            storage.save(filepath)
         break
 
     if not args.extract:
