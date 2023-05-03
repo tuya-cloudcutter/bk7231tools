@@ -53,6 +53,14 @@ class BkLinkCheckResp(Packet):
 
 
 @dataclass
+class BkWriteRegCmnd(Packet):
+    CODE = 0x01  # CMD_WriteReg
+    FORMAT = "<II"
+    address: int
+    value: int
+
+
+@dataclass
 class BkReadRegCmnd(Packet):
     CODE = 0x03  # CMD_ReadReg
     FORMAT = "<I"

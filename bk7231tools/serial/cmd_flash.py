@@ -162,13 +162,13 @@ class BK7231CmdFlash(BK7231CmdChip):
             sr |= self.flash_read_reg8(0x35) << 8
         return sr
 
-    def flash_write_sr(self, sr: int, size: int = 1):
+    def flash_write_sr(self, sr: int, size: int = 1, mask: int = 0xFFFF):
         if size == 1:
             self.flash_write_reg8(0x01, sr)
         else:
             self.flash_write_reg16(0x01, sr)
         sr_read = self.flash_read_sr(size)
-        if sr != sr_read:
+        if (sr & mask) != (sr_read & mask):
             raise RuntimeError(
                 f"Writing Status Register failed: wrote 0x{sr:04X}, got 0x{sr_read:04X}"
             )
@@ -200,7 +200,7 @@ class BK7231CmdFlash(BK7231CmdChip):
         sr_size = self.FLASH_SR_SIZE[flash_id]
         sr = self.flash_read_sr(size=sr_size)
         sr &= ~mask
-        self.flash_write_sr(sr, size=sr_size)
+        self.flash_write_sr(sr, size=sr_size, mask=mask)
 
     def flash_erase_block(
         self,
