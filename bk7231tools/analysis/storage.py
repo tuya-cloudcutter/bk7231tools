@@ -123,9 +123,12 @@ class TuyaStorage:
 
     def load(self, file: str) -> int:
         self.dumpfile = file
-        magic = bytes.fromhex(KEY_MAGIC) * 4
         with open(file, "rb") as f:
             filedata = f.read()
+        return self.load_raw(filedata)
+
+    def load_raw(self, filedata: bytes) -> int:
+        magic = bytes.fromhex(KEY_MAGIC) * 4
         try:
             pos = filedata.index(magic)
             pos -= 32  # rewind to block start
