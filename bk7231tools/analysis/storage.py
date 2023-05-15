@@ -127,7 +127,7 @@ class TuyaStorage:
             filedata = f.read()
         return self.load_raw(filedata)
 
-    def load_raw(self, filedata: bytes) -> int:
+    def load_raw(self, filedata: bytes, allow_incomplete: bool = False) -> int:
         magic = bytes.fromhex(KEY_MAGIC) * 4
         try:
             pos = filedata.index(magic)
@@ -137,7 +137,13 @@ class TuyaStorage:
         self.data = filedata[pos: pos + self.flash_sz + self.swap_flash_sz]
         self.data = bytearray(self.data)
         if len(self.data) != self.flash_sz + self.swap_flash_sz:
-            return None
+            if len(self.data) & 0xFFF:
+                return None
+            if allow_incomplete and len(self.data) >= 0x2000:
+                flash_sz = min(self.flash_sz, len(self.data) - 0x1000)
+                self.__init__(flash_sz=flash_sz, swap_flash_sz=len(self.data) - flash_sz)
+            else:
+                return None
         return pos
 
     def save(self, file: str):
