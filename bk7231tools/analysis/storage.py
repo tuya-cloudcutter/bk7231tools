@@ -41,19 +41,39 @@ def check_magic(found: int, *expected: int) -> bool:
 
 
 class TuyaStorage:
-    data: bytearray
+    _data: bytearray
     indexes: dict
 
-    def __init__(self, flash_sz: int = 0xE000, swap_flash_sz: int = 0x3000) -> None:
-        self.indexes = {}
+    def __init__(self, flash_sz: int = 0xE000, swap_flash_sz: int = None) -> None:
+        if swap_flash_sz is not None:
+            print("swap_flash_sz= is deprecated")
+        self.set_flash_sz(flash_sz)
+
+    @property
+    def data(self):
+        return self._data
+
+    @property
+    def length(self):
+        return len(self._data)
+
+    @data.setter
+    def data(self, value: bytes):
+        self._data = bytearray(value)
+        self.set_flash_sz(len(self.data))
+
+    @length.setter
+    def length(self, value: int):
+        if len(self.data) < value:
+            raise ValueError("Data length too short")
+        if len(self.data) & 0xFFF:
+            raise ValueError("Data length not on 4K boundary")
+        self.data = self.data[0:value]
+
+    def set_flash_sz(self, flash_sz: int):
         self.flash_sz = flash_sz
-        self.swap_flash_sz = swap_flash_sz
         self.block_sz = 1 << 12
-        self.start_addr = 0x200000 - swap_flash_sz - flash_sz
-        self.key_restore_addr = 0x200000 - swap_flash_sz - flash_sz - self.block_sz
-        self.flash_key_addr = self.key_restore_addr
-        self.block_nums = int(flash_sz // self.block_sz)
-        self.swap_block_nums = int(swap_flash_sz // self.block_sz)
+        self.block_nums = int(flash_sz // self.block_sz) - 1
         # not sure what that does
         v12 = 1
         while True:
@@ -62,12 +82,6 @@ class TuyaStorage:
             v12 *= 2
             if not (self.block_pages > 8 * ((self.page_sz - 15) & 0xFFFF)):
                 break
-        self.flash_pages = self.block_pages * (self.block_nums & 0xFFFF)
-        self.free_pages = self.flash_pages - self.block_nums
-
-    @property
-    def length(self):
-        return len(self.data)
 
     def get_output_name(self, key: str, output_directory: str) -> str:
         dumpfile_name = Path(self.dumpfile).stem
@@ -134,16 +148,8 @@ class TuyaStorage:
             pos -= 32  # rewind to block start
         except ValueError:
             return None
-        self.data = filedata[pos: pos + self.flash_sz + self.swap_flash_sz]
-        self.data = bytearray(self.data)
-        if len(self.data) != self.flash_sz + self.swap_flash_sz:
-            if len(self.data) & 0xFFF:
-                return None
-            if allow_incomplete and len(self.data) >= 0x2000:
-                flash_sz = min(self.flash_sz, len(self.data) - 0x1000)
-                self.__init__(flash_sz=flash_sz, swap_flash_sz=len(self.data) - flash_sz)
-            else:
-                return None
+        self.indexes = {}
+        self.data = filedata[pos:]
         return pos
 
     def save(self, file: str):
@@ -180,13 +186,20 @@ class TuyaStorage:
 
         key = self.make_inner_key(key)
         aes = AES.new(key, AES.MODE_ECB)
-        for i in range(self.block_nums):
-            block = self.block(i + 1, aes.decrypt(self.block(i + 1)))
+        i = 0
+        while True:
+            block = self.block(i + 1)
+            if not block.strip(b"\xFF"):
+                # skip empty blocks
+                break
+            block = self.block(i + 1, aes.decrypt(block))
             magic, crc, _ = unpack("<IIH", block[0:10])
             if not check_magic(magic, 0x98761234, 0x135726AB):
-                return False
+                break
             if not check_crc(crc, block[8:]):
-                return False
+                break
+            i += 1
+        self.length = i * self.block_sz
         return True
 
     def find_all_keys(self) -> List[str]:
