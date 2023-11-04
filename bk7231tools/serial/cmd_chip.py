@@ -17,6 +17,7 @@ from .packets import (
     BkReadRegResp,
     BkRebootCmnd,
     BkSetBaudRateCmnd,
+    BkWriteRegCmnd,
 )
 from .protocol import CHIP_BY_CRC, PROTOCOLS, BK7231Protocol, ProtocolType
 from .utils import fix_addr
@@ -98,6 +99,10 @@ class BK7231CmdChip(BK7231Protocol):
         command = BkReadRegCmnd(address)
         response: BkReadRegResp = self.command(command)
         return response.value
+
+    def register_write(self, address: int, value: int) -> None:
+        command = BkWriteRegCmnd(address, value)
+        self.command(command)
 
     def read_flash_range_crc(self, start: int, end: int) -> int:
         start = fix_addr(start)

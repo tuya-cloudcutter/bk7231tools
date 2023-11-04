@@ -56,6 +56,16 @@ class BkLinkCheckResp(Packet):
 class BkWriteRegCmnd(Packet):
     CODE = 0x01  # CMD_WriteReg
     FORMAT = "<II"
+    HAS_RESP_OTHER = True
+    HAS_RESP_SAME = slice(0, 8)
+    address: int
+    value: int
+
+
+@dataclass
+class BkWriteRegResp(Packet):
+    CODE = 0x01  # CMD_WriteReg
+    FORMAT = "<II"
     address: int
     value: int
 
@@ -277,6 +287,7 @@ class BkFlashEraseBlockCmnd(Packet):
 RESPONSE_TABLE: Dict[Type[Packet], Type[Packet]] = {
     # short commands
     BkLinkCheckCmnd: BkLinkCheckResp,  # 0x00 / CMD_LinkCheck
+    BkWriteRegCmnd: BkWriteRegResp,  # 0x01 / CMD_WriteReg
     BkReadRegCmnd: BkReadRegResp,  # 0x03 / CMD_ReadReg
     BkCheckCrcCmnd: BkCheckCrcResp,  # 0x10 / CMD_CheckCRC
     BkBootVersionCmnd: BkBootVersionResp,  # 0x11 / CMD_ReadBootVersion
