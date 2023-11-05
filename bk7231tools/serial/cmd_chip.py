@@ -69,16 +69,17 @@ class BK7231CmdChip(BK7231Protocol):
         # all known protocols support this command
         crc = self.read_flash_range_crc(0, 256) ^ 0xFFFFFFFF
         if crc in CHIP_BY_CRC:
-            self.chip_info = CHIP_BY_CRC[crc]
-            default = ProtocolType.BASIC_DEFAULT
+            self.chip_info, _ = CHIP_BY_CRC[crc]
             # read the protocol here already - it might not support BootVersion
-            self.protocol_type = PROTOCOLS.get(self.chip_info, default)
+            self.protocol_type = PROTOCOLS.get(self.chip_info, ProtocolType.UNKNOWN)
 
         # try BK7231S chip info command
         command = BkBootVersionCmnd()
         response: BkBootVersionResp = self.command(command, support_optional=True)
         if not response:
             # BootVersion not supported (got no error response as well)
+            default = ProtocolType.BASIC_DEFAULT
+            self.protocol_type = PROTOCOLS.get(self.chip_info, default)
             return self.chip_info
 
         if response.version == b"\x07":

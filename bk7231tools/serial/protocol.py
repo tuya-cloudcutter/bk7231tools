@@ -79,7 +79,7 @@ PROTOCOLS = {
     # bl_bk7231s_1.0.6_625D.bin
     "BK7231S_1.0.6": ProtocolType.BASIC_TUYA,
     # bl_bk7231q_6AFA.bin
-    "BK7231QN40": ProtocolType.BASIC_BEKEN,
+    "BK7231Q": ProtocolType.BASIC_BEKEN,
     # bl_bk7252_0.1.3_F4D3.bin
     "BK7252": ProtocolType.BASIC_BEKEN,
 }
@@ -88,10 +88,24 @@ PROTOCOLS = {
 # for chips that don't respond to BootVersion at all
 # NOTE: the values here are RAW, as received from the chip. They need to be XOR'ed to represent the real CRC.
 CHIP_BY_CRC = {
+    # bl_bk7231n_1.0.1_34B7.bin
+    0xBF9C2D66: ("BK7231N", "1.0.1"),
     # bl_bk7231q_6AFA.bin
-    0x0FDCE109: "BK7231QN40",
+    0x0FDCE109: ("BK7231Q", None),
+    # bl_bk7231q_tysdk_03ED.bin
+    0x00A5C153: ("BK7231Q", None),
+    # bl_bk7231s_1.0.1_79A6.bin
+    0x3E13578E: ("BK7231T", "1.0.1"),
+    # bl_bk7231s_1.0.3_DAAE.bin
+    0xB4CE1BB2: ("BK7231T", "1.0.3"),
+    # bl_bk7231s_1.0.5_4FF7.bin
+    0x45AB3E47: ("BK7231T", "1.0.5"),
+    # bl_bk7231s_1.0.6_625D.bin
+    0x1A3436AC: ("BK7231T", "1.0.6"),
     # bl_bk7252_0.1.3_F4D3.bin
-    0xC6064AF3: "BK7252",
+    0xC6064AF3: ("BK7252", "0.1.3"),
+    # bootloader_7252_2M_uart1_log_20190828.bin
+    0x1C5D83D9: ("BK7252", None),
 }
 
 
@@ -136,12 +150,13 @@ class BK7231Protocol:
                 f"Not implemented in protocol {self.protocol_type.name}: code={code}, is_long={is_long}"
             )
 
-    def check_protocol(self, code: int, is_long: bool) -> bool:
+    def check_protocol(self, code: int, is_long: bool = False) -> bool:
         if self.protocol_type == ProtocolType.UNKNOWN:
             return True
         pair = (code, is_long)
         if pair not in self.protocol_type.value:
             return False
+        return True
 
     @staticmethod
     def encode(packet: Packet) -> bytes:
