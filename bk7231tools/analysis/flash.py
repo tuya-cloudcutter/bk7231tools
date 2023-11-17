@@ -35,5 +35,23 @@ FLASH_LAYOUTS = {
                 mapped_address=0x10000,
             ),
         ],
-    )
+    ),
+    "ota_big": FlashLayout(
+        name="ota_big",
+        with_crc=True,
+        partitions=[
+            FlashPartition(
+                name="bootloader",
+                size=68 * 1024,
+                start_address=0x00000000,
+                mapped_address=0x0,
+            ),
+            FlashPartition(
+                name="app",
+                size=1628160,
+                start_address=0x00011000,
+                mapped_address=0x10000,
+            ),
+        ],
+    ),
 }
