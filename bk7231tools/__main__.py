@@ -278,7 +278,7 @@ def dissect_dump_file(args):
             app_code = code
 
     try:
-        pass
+        import Cryptodome
     except (ImportError, ModuleNotFoundError):
         print(
             "NOTE: skipping storage decryption because of missing PyCryptodomex dependency."
@@ -287,14 +287,8 @@ def dissect_dump_file(args):
             "      Install using 'pip install bk7231tools[cli]' to add the dependency."
         )
         return
-    try:
-        from bk7231tools.analysis.storage import TuyaStorage
-    except SyntaxError:
-        print(
-            "NOTE: skipping storage decryption because of incompatible Python version."
-        )
-        print("      Install Python 3.10 or newer and try again.")
-        return
+
+    from bk7231tools.analysis.storage import TuyaStorage
 
     keys = []
     while True:

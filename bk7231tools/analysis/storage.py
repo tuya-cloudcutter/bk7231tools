@@ -8,8 +8,6 @@ from pathlib import Path
 from struct import unpack
 from typing import List
 
-from .goto import with_goto
-
 KEY_MASTER = b"qwertyuiopasdfgh"
 # FF's encrypted using master key
 KEY_MAGIC = "46DCED0E672F3B70AE1276A3F8712E03"
@@ -272,51 +270,34 @@ class TuyaStorage:
             return None
         return buf
 
-    @with_goto
     def sf_find_index(self, name: str):
-        v9 = 0
-        label.label_12
-        if v9 >= self.block_nums:
-            return None
-        v8 = self.page(ib=v9, ip=0)
-        j = 0
-
-        while True:
-            if j >= v8[14]:
-                v9 += 1
-                goto.label_12
-            if v8[j + 15]:
-                break
-            label.label_18
-            j += 1
-
-        k = 0
-        while True:
-            if not ((v8[j + 15] >> k) & 1):
-                goto.label_17
-            v13 = ((8 * j & 0xFF) + k) & 0xFF
-            v14, tmp_index = self.make_sf_index((v8[9] << 8) | v8[8], v13)
-            if not v14:
-                break
-            if v14 != 8:
-                return None
-            label.label_17
-            k += 1
-            if k == 8:
-                goto.label_18
-
-        v15 = len(name)
-        if v15 + 1 != tmp_index["name_len"] or name != tmp_index["name"]:
-            goto.label_17
-
-        return tmp_index
+        for block_id in range(0, self.block_nums):
+            page = self.page(ib=block_id, ip=0)
+            map_size = page[14]
+            map_data = page[15 : 15 + map_size]
+            for map_byte in range(0, map_size):
+                if not map_data[map_byte]:
+                    continue
+                for map_bit in range(0, 8):
+                    if not (map_data[map_byte] & (1 << map_bit)):
+                        continue
+                    page_id = (map_byte * 8) + map_bit
+                    tmp_index = self.make_sf_index((page[9] << 8) | page[8], page_id)
+                    if not tmp_index:
+                        continue
+                    if (
+                        len(name) + 1 == tmp_index["name_len"]
+                        and name == tmp_index["name"]
+                    ):
+                        return tmp_index
+        return None
 
     def make_sf_index(self, block_id: int, page_id: int):
         v5 = self.page(block_id, page_id, 18)
         v10 = v5[17] + 18
         size = v10 + 4 * ((v5[12] << 8) | v5[11])
         if size > self.page_sz:
-            return 8, None
+            return None
         v4 = self.page(block_id, page_id, size)
         v4 = bytearray(v4)
         # print(v4.hex(" ", -1))
@@ -343,4 +324,4 @@ class TuyaStorage:
             name=v4[18 : 18 + v4s[6]].rstrip(b"\x00").decode(),
         )
         self.indexes[idx["name"]] = idx
-        return 0, idx
+        return idx
