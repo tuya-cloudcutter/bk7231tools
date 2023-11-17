@@ -11,10 +11,12 @@ def _generate_uint_pn15(index_mask, flag):
     val_rshift_5_nibble = val_rshift_5 & 0xF
 
     xor_lhs = uint16(uint16(index_mask >> 7) + uint16(index_mask * 0x200))
-    xor_rhs = uint16(val_rshift_5 * 0x1000) + \
-        uint16(val_rshift_5_nibble * 0x100) + \
-        uint8(val_rshift_5 * 0x10) + \
-        val_rshift_5_nibble
+    xor_rhs = (
+        uint16(val_rshift_5 * 0x1000)
+        + uint16(val_rshift_5_nibble * 0x100)
+        + uint8(val_rshift_5 * 0x10)
+        + val_rshift_5_nibble
+    )
 
     xor_rhs = xor_rhs & PN15_AND_CONST
 
@@ -25,13 +27,17 @@ def _generate_uint_pn16(index_mask, flag):
     if flag:
         return 0
     PN16_AND_CONST = 0x13659
-    part1 = ((index_mask >> 13) & 1) + \
-            (((index_mask >> 9) & 1) * 2) + \
-            (((index_mask >> 5) & 1) * 4) + \
-            (((index_mask >> 1) & 1) * 8)
+    part1 = (
+        ((index_mask >> 13) & 1)
+        + (((index_mask >> 9) & 1) * 2)
+        + (((index_mask >> 5) & 1) * 4)
+        + (((index_mask >> 1) & 1) * 8)
+    )
 
     xor_lhs = ((index_mask & 0x3FF) << 7) + ((index_mask >> 10) & 0x7F)
-    xor_rhs = uint32((((index_mask >> 4) & 1) * 0x10000) + (part1 * 0x1000) + (part1 * 0x111))
+    xor_rhs = uint32(
+        (((index_mask >> 4) & 1) * 0x10000) + (part1 * 0x1000) + (part1 * 0x111)
+    )
     xor_rhs = xor_rhs & PN16_AND_CONST
 
     return uint32(xor_lhs ^ xor_rhs)
@@ -43,11 +49,13 @@ def _generate_uint_pn32(index_mask, flag):
     PN32_AND_CONST = 0xE519A4F1
     xor_lhs = uint32(index_mask >> 0xF | index_mask << 0x11)
     xor_rhs_start = (index_mask >> 2) & 0xF
-    xor_rhs = uint32(xor_rhs_start * 0x10000000) + \
-        uint32(xor_rhs_start * 0x01000000) + \
-        uint32(xor_rhs_start * 0x00100000) + \
-        uint32(xor_rhs_start * 0x00010000) + \
-        uint32(xor_rhs_start * 0x00001111)
+    xor_rhs = (
+        uint32(xor_rhs_start * 0x10000000)
+        + uint32(xor_rhs_start * 0x01000000)
+        + uint32(xor_rhs_start * 0x00100000)
+        + uint32(xor_rhs_start * 0x00010000)
+        + uint32(xor_rhs_start * 0x00001111)
+    )
     xor_rhs = xor_rhs & PN32_AND_CONST
     return xor_lhs ^ xor_rhs
 
@@ -60,12 +68,14 @@ class BekenCodeCipher(object):
 
     def encrypt(self, data: bytes, stream_start_offset: int = 0):
         if (len(data) % self.BLOCK_LENGTH_BYTES) != 0:
-            raise ValueError(f"Given data length {len(data)} is not a multiple of block length {self.BLOCK_LENGTH_BYTES}")
+            raise ValueError(
+                f"Given data length {len(data)} is not a multiple of block length {self.BLOCK_LENGTH_BYTES}"
+            )
 
         encrypted = bytearray()
         for i in range(0, len(data), self.BLOCK_LENGTH_BYTES):
-            block = data[i:i+self.BLOCK_LENGTH_BYTES]
-            block_start_offset = (i + stream_start_offset)
+            block = data[i : i + self.BLOCK_LENGTH_BYTES]
+            block_start_offset = i + stream_start_offset
             encrypted.extend(self._encrypt_block(block, block_start_offset))
 
         return encrypted
@@ -82,13 +92,15 @@ class BekenCodeCipher(object):
 
     def _encrypt_block(self, block: bytes, block_start_offset: int):
         if len(block) != self.BLOCK_LENGTH_BYTES:
-            raise ValueError(f"Block length must be exactly {self.BLOCK_LENGTH_BYTES} bytes")
+            raise ValueError(
+                f"Block length must be exactly {self.BLOCK_LENGTH_BYTES} bytes"
+            )
 
         WORD_SIZE = 4
 
         encrypted = bytearray()
         for i in range(0, len(block), WORD_SIZE):
-            word = int.from_bytes(block[i:i+WORD_SIZE], byteorder="little")
+            word = int.from_bytes(block[i : i + WORD_SIZE], byteorder="little")
             encrypted_word = self._encrypt_word(block_start_offset + i, word)
             encrypted.extend(encrypted_word.to_bytes(WORD_SIZE, byteorder="little"))
 
@@ -98,7 +110,9 @@ class BekenCodeCipher(object):
         coef3_highbyte_cond = False
         coef3_1_bit, coef3_2_bit, coef3_4_bit, coef3_8_bit = False, False, False, False
 
-        if (((self._coef3 & 0xff000000) == 0xff000000) or ((self._coef3 & 0xff000000) == 0)):
+        if ((self._coef3 & 0xFF000000) == 0xFF000000) or (
+            (self._coef3 & 0xFF000000) == 0
+        ):
             coef3_highbyte_cond = True
 
         if coef3_highbyte_cond:
@@ -120,19 +134,26 @@ class BekenCodeCipher(object):
         index_mask_seq = uint16(index >> 8)
 
         if coef3_5_rsh == 0:
-            pn15_word = (uint8(index_mask_16_rsh) + uint16((index >> 24) << 8)) ^ uint16(index)
+            pn15_word = (
+                uint8(index_mask_16_rsh) + uint16((index >> 24) << 8)
+            ) ^ uint16(index)
         elif coef3_5_rsh == 1:
-            pn15_word = (uint8(index_mask_16_rsh) + uint16((index >> 24) << 8))
-            pn15_word ^= (uint8(index_mask_seq) + uint16(index << 8))
+            pn15_word = uint8(index_mask_16_rsh) + uint16((index >> 24) << 8)
+            pn15_word ^= uint8(index_mask_seq) + uint16(index << 8)
         elif coef3_5_rsh == 2:
-            pn15_word = ((index_mask_16_rsh >> 8) + uint16((index >> 16) << 8)) ^ uint16(index)
+            pn15_word = (
+                (index_mask_16_rsh >> 8) + uint16((index >> 16) << 8)
+            ) ^ uint16(index)
         else:
-            pn15_word = ((index_mask_16_rsh >> 8) + uint16((index >> 16) << 8))
-            pn15_word ^= (uint8(index_mask_seq) + uint16(index << 8))
+            pn15_word = (index_mask_16_rsh >> 8) + uint16((index >> 16) << 8)
+            pn15_word ^= uint8(index_mask_seq) + uint16(index << 8)
 
-        pn16_word = (index >> coef3_8_rsh) & 0x1ffff
+        pn16_word = (index >> coef3_8_rsh) & 0x1FFFF
         PN32_SHIFTS = ((0, 0), (8, 24), (16, 16), (24, 8))
-        pn32_word = uint32(index >> PN32_SHIFTS[coef3_11_rsh][0] | index << PN32_SHIFTS[coef3_11_rsh][1])
+        pn32_word = uint32(
+            index >> PN32_SHIFTS[coef3_11_rsh][0]
+            | index << PN32_SHIFTS[coef3_11_rsh][1]
+        )
 
         pn15_index_mask = uint16((self._coef1 >> 16) ^ pn15_word)
 

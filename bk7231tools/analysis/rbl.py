@@ -41,14 +41,21 @@ class Header:
         header = cls(*cls.FORMAT.unpack(data))
         header.algo = OTAAlgorithm(header.algo)
         cls.__validate_data(data, info_crc32=header.info_crc32)
-        def __clean_c_string(x): return x[:x.index(b"\x00")].decode()
+
+        def __clean_c_string(x):
+            return x[: x.index(b"\x00")].decode()
+
         header.name, header.version, header.sn = tuple(
-            map(__clean_c_string, [header.name, header.version, header.sn]))
+            map(__clean_c_string, [header.name, header.version, header.sn])
+        )
         return header
 
     def to_bytes(self) -> bytes:
         data_tuple = astuple(self)
-        def encode_str(x): return x if not isinstance(x, str) else x.encode('utf-8')
+
+        def encode_str(x):
+            return x if not isinstance(x, str) else x.encode("utf-8")
+
         data_tuple = tuple(map(encode_str, data_tuple))
         return self.FORMAT.pack(*data_tuple)
 
@@ -57,7 +64,8 @@ class Header:
         calculated_crc = crc32(data[:-4])
         if calculated_crc != info_crc32:
             raise ValueError(
-                f"Header crc32 {info_crc32:#x} does not match calculated header crc32 {calculated_crc:#x}")
+                f"Header crc32 {info_crc32:#x} does not match calculated header crc32 {calculated_crc:#x}"
+            )
 
 
 __HEADER_MAGIC_NEEDLE = bytes([Header.MAGIC[0]]), Header.MAGIC[1:]
@@ -74,7 +82,8 @@ class Container(object):
 
         if magic != Header.MAGIC:
             raise ValueError(
-                f"Given bytestream magic {magic.hex()}[hex] does not match an RBL container magic")
+                f"Given bytestream magic {magic.hex()}[hex] does not match an RBL container magic"
+            )
 
         if flash_layout and flash_layout.with_crc:
             bytestream.seek(bytestream.tell() - len(magic), os.SEEK_SET)
@@ -82,19 +91,21 @@ class Container(object):
             header_byte_count = Header.FORMAT.size
             crc_byte_count = (header_byte_count // 32) * 2
             header = Header.from_bytes(headerstream.read(header_byte_count))
-            bytestream.seek(bytestream.tell() + header_byte_count + crc_byte_count, os.SEEK_SET)
+            bytestream.seek(
+                bytestream.tell() + header_byte_count + crc_byte_count, os.SEEK_SET
+            )
         else:
             header_byte_count = Header.FORMAT.size - len(magic)
-            header = Header.from_bytes(
-                magic + bytestream.read(header_byte_count))
+            header = Header.from_bytes(magic + bytestream.read(header_byte_count))
 
         bytestream = cls.__create_bytestream_for_layout(
-            header, bytestream, flash_layout)
+            header, bytestream, flash_layout
+        )
         payload = bytestream.read(header.size_package)
         # TODO: implement AES and GZIP support
         if header.algo == OTAAlgorithm.NONE:
             padding = header.size_package - header.size_raw
-            payload = payload[:header.size_raw] + (bytes([padding]) * padding)
+            payload = payload[: header.size_raw] + (bytes([padding]) * padding)
         payload_crc = crc32(payload)
         if payload_crc != header.crc32:
             payload = None
@@ -109,16 +120,20 @@ class Container(object):
         bytestream.write(self.payload)
 
     @classmethod
-    def __create_bytestream_for_layout(cls, header: Header, bytestream: io.BytesIO, flash_layout: FlashLayout) -> io.BytesIO:
+    def __create_bytestream_for_layout(
+        cls, header: Header, bytestream: io.BytesIO, flash_layout: FlashLayout
+    ) -> io.BytesIO:
         if flash_layout is None:
             return bytestream
-        partition = filter(lambda x: x.name == header.name,
-                           flash_layout.partitions).__next__()
+        partition = filter(
+            lambda x: x.name == header.name, flash_layout.partitions
+        ).__next__()
         start_position = bytestream.tell()
         package_position = start_position - partition.size
         if package_position < 0:
             raise ValueError(
-                f"Partition {header.name} does not have enough bytes for payload")
+                f"Partition {header.name} does not have enough bytes for payload"
+            )
         new_stream = io.BytesIO()
         package_read_bytes = partition.size - Header.FORMAT.size
         if flash_layout.with_crc:
@@ -127,7 +142,11 @@ class Container(object):
         new_stream.write(bytestream.read(package_read_bytes))
         bytestream.seek(start_position, os.SEEK_SET)
         new_stream.seek(0, os.SEEK_SET)
-        return new_stream if not flash_layout.with_crc else cls.__create_bytestream_without_crc(new_stream)
+        return (
+            new_stream
+            if not flash_layout.with_crc
+            else cls.__create_bytestream_without_crc(new_stream)
+        )
 
     @classmethod
     def __create_bytestream_without_crc(cls, bytestream: io.BytesIO) -> io.BytesIO:
@@ -137,7 +156,7 @@ class Container(object):
         if block_crc_check(crc_blocks[:32], crc_blocks[32:34]):
             bytestream.seek(start_position, os.SEEK_SET)
         elif block_crc_check(crc_blocks[2:34], crc_blocks[34:36]):
-            bytestream.seek(start_position+2, os.SEEK_SET)
+            bytestream.seek(start_position + 2, os.SEEK_SET)
         else:
             pass
 

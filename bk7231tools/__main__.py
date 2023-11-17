@@ -45,22 +45,35 @@ def __ensure_output_dir_exists(output_dir):
     return output_dir
 
 
-def __generate_payload_output_file_path(dumpfile: str, payload_name: str, output_directory: str, extra_tag: str) -> str:
+def __generate_payload_output_file_path(
+    dumpfile: str, payload_name: str, output_directory: str, extra_tag: str
+) -> str:
     dumpfile_name = Path(dumpfile).stem
-    return os.path.join(output_directory, f"{dumpfile_name}_{payload_name}_{extra_tag}.bin")
+    return os.path.join(
+        output_directory, f"{dumpfile_name}_{payload_name}_{extra_tag}.bin"
+    )
 
 
 def __decrypt_code_partition(partition: flash.FlashPartition, payload: bytes):
     CODE_PARTITION_COEFFICIENTS = base64.b64decode("UQ+wk6PL6txZk6F+x63rAw==")
-    coefficients = (CODE_PARTITION_COEFFICIENTS[i:i+4] for i in range(0, len(CODE_PARTITION_COEFFICIENTS), 4))
-    coefficients = tuple(int.from_bytes(i, byteorder='big') for i in coefficients)
+    coefficients = (
+        CODE_PARTITION_COEFFICIENTS[i : i + 4]
+        for i in range(0, len(CODE_PARTITION_COEFFICIENTS), 4)
+    )
+    coefficients = tuple(int.from_bytes(i, byteorder="big") for i in coefficients)
 
     cipher = BekenCodeCipher(coefficients)
     padded_payload = cipher.pad(payload)
     return cipher.decrypt(padded_payload, partition.mapped_address)
 
 
-def __carve_and_write_rbl_containers(dumpfile: str, layout: flash.FlashLayout, output_directory: str, extract: bool = False, with_rbl: bool = False) -> List[rbl.Container]:
+def __carve_and_write_rbl_containers(
+    dumpfile: str,
+    layout: flash.FlashLayout,
+    output_directory: str,
+    extract: bool = False,
+    with_rbl: bool = False,
+) -> List[rbl.Container]:
     containers = []
     app_code = None
     with open(dumpfile, "rb") as fs:
@@ -79,7 +92,8 @@ def __carve_and_write_rbl_containers(dumpfile: str, layout: flash.FlashLayout, o
                     containers.append(container)
                     if container.payload is not None:
                         print(
-                            f"{container.header.name} - [encoding_algorithm={container.header.algo.name}, size={len(container.payload):#x}]")
+                            f"{container.header.name} - [encoding_algorithm={container.header.algo.name}, size={len(container.payload):#x}]"
+                        )
                         partition = layout.partitions[0]
                         for p in layout.partitions:
                             if p.name == container.header.name:
@@ -88,15 +102,27 @@ def __carve_and_write_rbl_containers(dumpfile: str, layout: flash.FlashLayout, o
                         if extract:
                             extra_tag = container.header.version
                             filepath = __generate_payload_output_file_path(
-                                dumpfile=dumpfile, payload_name=container.header.name, output_directory=output_directory, extra_tag=extra_tag)
+                                dumpfile=dumpfile,
+                                payload_name=container.header.name,
+                                output_directory=output_directory,
+                                extra_tag=extra_tag,
+                            )
                             with open(filepath, "wb") as fsout:
-                                container.write_to_bytestream(fsout, payload_only=(not with_rbl))
+                                container.write_to_bytestream(
+                                    fsout, payload_only=(not with_rbl)
+                                )
 
                             extra_tag = f"{container.header.version}_decrypted"
                             decryptedpath = __generate_payload_output_file_path(
-                                dumpfile=dumpfile, payload_name=container.header.name, output_directory=output_directory, extra_tag=extra_tag)
+                                dumpfile=dumpfile,
+                                payload_name=container.header.name,
+                                output_directory=output_directory,
+                                extra_tag=extra_tag,
+                            )
                             with open(decryptedpath, "wb") as fsout:
-                                code = __decrypt_code_partition(partition, container.payload)
+                                code = __decrypt_code_partition(
+                                    partition, container.payload
+                                )
                                 fsout.write(code)
                             if container.header.name == "app":
                                 app_code = code
@@ -107,9 +133,17 @@ def __carve_and_write_rbl_containers(dumpfile: str, layout: flash.FlashLayout, o
     return containers, app_code
 
 
-def __scan_pattern_find_payload(dumpfile: str, partition_name: str, layout: flash.FlashLayout, output_directory: str, extract: bool = False):
+def __scan_pattern_find_payload(
+    dumpfile: str,
+    partition_name: str,
+    layout: flash.FlashLayout,
+    output_directory: str,
+    extract: bool = False,
+):
     if not partition_name in {p.name for p in layout.partitions}:
-        raise ValueError(f"Partition name {partition_name} is unknown in layout {layout.name}")
+        raise ValueError(
+            f"Partition name {partition_name} is unknown in layout {layout.name}"
+        )
 
     final_payload_data = None
     partition = list(filter(lambda p: p.name == partition_name, layout.partitions))[0]
@@ -118,7 +152,7 @@ def __scan_pattern_find_payload(dumpfile: str, partition_name: str, layout: flas
         data = fs.read(partition.size)
         i = partition.size
         while i > 0:
-            datablock = data[i-16:i]
+            datablock = data[i - 16 : i]
             # Scan for a block of 16 FF bytes, indicating padding at the end of a partition.
             # This is to ignore RBL headers and other metadata while scanning.
             if datablock == (b"\xFF" * 16):
@@ -130,10 +164,10 @@ def __scan_pattern_find_payload(dumpfile: str, partition_name: str, layout: flas
         # Now do a pattern scan until we hit the first CRC-16 block
         # and the padding block right before it
         while i > 0:
-            datablock = data[i-16:i]
-            if datablock != (b"\xFF" * 16) and data[i-32:i-16] == (b"\xFF" * 16):
+            datablock = data[i - 16 : i]
+            if datablock != (b"\xFF" * 16) and data[i - 32 : i - 16] == (b"\xFF" * 16):
                 # This is exactly after the last 0xFF padding block including its CRC-16 checksum
-                i = (i - 16 + 2)
+                i = i - 16 + 2
                 break
             i -= 16
         payload = data[:i]
@@ -153,7 +187,9 @@ def __scan_pattern_find_payload(dumpfile: str, partition_name: str, layout: flas
             crc_bytes = block_io_stream.read(2)
             if not utils.block_crc_check(block, crc_bytes):
                 if first:
-                    raise ValueError(f"First block level CRC-16 checks failed while analyzing partition {partition.name}")
+                    raise ValueError(
+                        f"First block level CRC-16 checks failed while analyzing partition {partition.name}"
+                    )
                 else:
                     # One of the CRC checks after the first one has failed, so either
                     # end of stream has been reached or the dump is mangled.
@@ -167,18 +203,30 @@ def __scan_pattern_find_payload(dumpfile: str, partition_name: str, layout: flas
 
     app_code = None
     if final_payload_data is not None:
-        print(f"\t{partition.start_address:#x}: {partition.name} - [NO RBL, size={len(final_payload_data):#x}]")
+        print(
+            f"\t{partition.start_address:#x}: {partition.name} - [NO RBL, size={len(final_payload_data):#x}]"
+        )
         if extract:
             extra_tag = "pattern_scan"
-            filepath = __generate_payload_output_file_path(dumpfile, payload_name=partition_name,
-                                                           output_directory=output_directory, extra_tag=extra_tag)
+            filepath = __generate_payload_output_file_path(
+                dumpfile,
+                payload_name=partition_name,
+                output_directory=output_directory,
+                extra_tag=extra_tag,
+            )
             with open(filepath, "wb") as fs:
                 fs.write(final_payload_data)
 
             extra_tag = "pattern_scan_decrypted"
-            decryptedpath = __generate_payload_output_file_path(dumpfile, payload_name=partition_name,
-                                                                output_directory=output_directory, extra_tag=extra_tag)
-            decrypted_final_payload_data = __decrypt_code_partition(partition, final_payload_data)
+            decryptedpath = __generate_payload_output_file_path(
+                dumpfile,
+                payload_name=partition_name,
+                output_directory=output_directory,
+                extra_tag=extra_tag,
+            )
+            decrypted_final_payload_data = __decrypt_code_partition(
+                partition, final_payload_data
+            )
             with open(decryptedpath, "wb") as fs:
                 fs.write(decrypted_final_payload_data)
             if partition_name == "app":
@@ -196,33 +244,55 @@ def dissect_dump_file(args):
     layout = flash.FLASH_LAYOUTS.get(flash_layout, None)
 
     if output_directory != default_output_dir and not args.extract:
-        print("Output directory is different from default: assuming -e (extract) is desired")
+        print(
+            "Output directory is different from default: assuming -e (extract) is desired"
+        )
         args.extract = True
 
     if args.extract:
         output_directory = __ensure_output_dir_exists(output_directory)
 
-    containers, app_code = __carve_and_write_rbl_containers(dumpfile=dumpfile, layout=layout,
-                                                            output_directory=output_directory, extract=args.extract, with_rbl=args.rbl)
-    container_names = {container.header.name for container in containers if container.payload is not None}
+    containers, app_code = __carve_and_write_rbl_containers(
+        dumpfile=dumpfile,
+        layout=layout,
+        output_directory=output_directory,
+        extract=args.extract,
+        with_rbl=args.rbl,
+    )
+    container_names = {
+        container.header.name
+        for container in containers
+        if container.payload is not None
+    }
     missing_rbl_containers = {part.name for part in layout.partitions} - container_names
     for missing in missing_rbl_containers:
         print(f"Missing {missing} RBL container. Using a scan pattern instead")
-        _, code = __scan_pattern_find_payload(dumpfile, partition_name=missing, layout=layout,
-                                              output_directory=output_directory, extract=args.extract)
+        _, code = __scan_pattern_find_payload(
+            dumpfile,
+            partition_name=missing,
+            layout=layout,
+            output_directory=output_directory,
+            extract=args.extract,
+        )
         if missing == "app" and not app_code:
             app_code = code
 
     try:
-        import Cryptodome
+        pass
     except (ImportError, ModuleNotFoundError):
-        print("NOTE: skipping storage decryption because of missing PyCryptodomex dependency.")
-        print("      Install using 'pip install bk7231tools[cli]' to add the dependency.")
+        print(
+            "NOTE: skipping storage decryption because of missing PyCryptodomex dependency."
+        )
+        print(
+            "      Install using 'pip install bk7231tools[cli]' to add the dependency."
+        )
         return
     try:
         from bk7231tools.analysis.storage import TuyaStorage
     except SyntaxError:
-        print("NOTE: skipping storage decryption because of incompatible Python version.")
+        print(
+            "NOTE: skipping storage decryption because of incompatible Python version."
+        )
         print("      Install Python 3.10 or newer and try again.")
         return
 
@@ -274,7 +344,9 @@ def dissect_dump_file(args):
 
     if upk is not None:
         dumpfile_name = Path(dumpfile).stem
-        out_name = os.path.join(output_directory, f"{dumpfile_name}_user_param_key.json")
+        out_name = os.path.join(
+            output_directory, f"{dumpfile_name}_user_param_key.json"
+        )
         with open(out_name, "w") as f:
             print(f"\t- found! Extracted to {out_name}")
             json.dump(upk, f, indent="\t")
@@ -309,7 +381,9 @@ def read_flash(device: BK7231Serial, args):
         args.start = args.deprecated_start
 
     if args.deprecated_count is not None:
-        print("WARNING! -c/--count is deprecated: please use -l/--length <bytes> instead.")
+        print(
+            "WARNING! -c/--count is deprecated: please use -l/--length <bytes> instead."
+        )
         if args.length is not None:
             print("Both --count and --length provided. Cannot continue.")
             exit(1)
@@ -318,7 +392,9 @@ def read_flash(device: BK7231Serial, args):
     args.start = args.start or 0x000000
 
     if args.length and args.start + args.length > 0x200000:
-        print(f"Reading 0x{args.length:X} bytes at 0x{args.start:X} would go past the flash memory end")
+        print(
+            f"Reading 0x{args.length:X} bytes at 0x{args.start:X} would go past the flash memory end"
+        )
         exit(1)
 
     args.length = args.length or (0x200000 - args.start)
@@ -326,7 +402,9 @@ def read_flash(device: BK7231Serial, args):
     print(f"Reading {args.length} bytes from 0x{args.start:X}")
 
     with open(args.file, "wb") as fs:
-        for data in device.flash_read(args.start, args.length, not args.no_verify_checksum):
+        for data in device.flash_read(
+            args.start, args.length, not args.no_verify_checksum
+        ):
             fs.write(data)
 
 
@@ -335,9 +413,15 @@ def write_flash(device: BK7231Serial, args):
     args.skip = args.skip or 0x000000
 
     if args.start < 0x11000 and not args.bootloader:
-        print(f"The start offset you specified (0x{args.start:06X}) will overwrite the bootloader area.")
-        print("If that's really what you want, pass the additional -B/--bootloader flag.")
-        print("This can only be used on BK7231N, otherwise it will probably render the device unusable (and unrecoverable).")
+        print(
+            f"The start offset you specified (0x{args.start:06X}) will overwrite the bootloader area."
+        )
+        print(
+            "If that's really what you want, pass the additional -B/--bootloader flag."
+        )
+        print(
+            "This can only be used on BK7231N, otherwise it will probably render the device unusable (and unrecoverable)."
+        )
         print("** Passing the -B flag will not check for chip type **")
         exit(1)
 
@@ -352,7 +436,9 @@ def write_flash(device: BK7231Serial, args):
             print("Length is bigger than entire file size")
             exit(1)
         if args.start + args.length > 0x200000:
-            print(f"Writing 0x{args.length:X} bytes at 0x{args.start:X} would go past the flash memory end")
+            print(
+                f"Writing 0x{args.length:X} bytes at 0x{args.start:X} would go past the flash memory end"
+            )
             exit(1)
         size = args.length
 
@@ -376,7 +462,9 @@ def parse_args():
         description="Utilities to interact with BK7231 chips over serial and analyze their artifacts",
     )
 
-    subparsers = parser.add_subparsers(dest="command", required=True, help="subcommand to execute")
+    subparsers = parser.add_subparsers(
+        dest="command", required=True, help="subcommand to execute"
+    )
 
     parser_chip_info = subparsers.add_parser("chip_info", help="Show chip information")
     parser_chip_info = __add_serial_args(parser_chip_info)
@@ -423,7 +511,9 @@ def parse_args():
     parser_read_flash.set_defaults(handler=read_flash)
     parser_read_flash.set_defaults(device_required=True)
 
-    parser_write_flash = subparsers.add_parser("write_flash", help="Write data to flash")
+    parser_write_flash = subparsers.add_parser(
+        "write_flash", help="Write data to flash"
+    )
     parser_write_flash = __add_serial_args(parser_write_flash)
     parser_write_flash.add_argument("file", help="File to write to flash")
     parser_write_flash.add_argument(
@@ -462,17 +552,42 @@ def parse_args():
     parser_write_flash.set_defaults(handler=write_flash)
     parser_write_flash.set_defaults(device_required=True)
 
-    parser_dissect_dump = subparsers.add_parser("dissect_dump", help="Dissect and extract RBL containers from flash dump files")
+    parser_dissect_dump = subparsers.add_parser(
+        "dissect_dump", help="Dissect and extract RBL containers from flash dump files"
+    )
     parser_dissect_dump.add_argument("file", help="Flash dump file to dissect")
-    parser_dissect_dump.add_argument("-l", "--layout", default="ota_1", help="Flash layout used to generate the dump file (default: ota_1)")
-    parser_dissect_dump.add_argument("-O", "--output-dir", dest="output_dir", default="",
-                                     help="Output directory for extracted RBL files (default: current working directory)")
-    parser_dissect_dump.add_argument("-e", "--extract", action="store_true", default=False,
-                                     help="Extract identified RBL containers instead of outputting information only (default: False)")
-    parser_dissect_dump.add_argument("--rbl", action="store_true", default=False,
-                                     help="Extract the RBL container instead of just its payload (default: False)")
-    parser_dissect_dump.add_argument("--storage", action="store_true", default=False,
-                                     help="Extract storage keys into separate files (default: False)")
+    parser_dissect_dump.add_argument(
+        "-l",
+        "--layout",
+        default="ota_1",
+        help="Flash layout used to generate the dump file (default: ota_1)",
+    )
+    parser_dissect_dump.add_argument(
+        "-O",
+        "--output-dir",
+        dest="output_dir",
+        default="",
+        help="Output directory for extracted RBL files (default: current working directory)",
+    )
+    parser_dissect_dump.add_argument(
+        "-e",
+        "--extract",
+        action="store_true",
+        default=False,
+        help="Extract identified RBL containers instead of outputting information only (default: False)",
+    )
+    parser_dissect_dump.add_argument(
+        "--rbl",
+        action="store_true",
+        default=False,
+        help="Extract the RBL container instead of just its payload (default: False)",
+    )
+    parser_dissect_dump.add_argument(
+        "--storage",
+        action="store_true",
+        default=False,
+        help="Extract storage keys into separate files (default: False)",
+    )
     parser_dissect_dump.set_defaults(handler=dissect_dump_file)
     parser_dissect_dump.set_defaults(device_required=False)
 
@@ -484,7 +599,9 @@ def cli():
 
     try:
         if args.device_required:
-            with closing(connect_device(args.device, args.baudrate, args.timeout, args.debug)) as device:
+            with closing(
+                connect_device(args.device, args.baudrate, args.timeout, args.debug)
+            ) as device:
                 args.handler(device, args)
         else:
             args.handler(args)

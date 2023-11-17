@@ -1,0 +1,15 @@
+name: Release
+on:
+  push:
+    tags: ["v*.*.*"]
+jobs:
+  lint-python:
+    name: Run Python lint
+    uses: kuba2k2/kuba2k2/.github/workflows/lint-python.yml@master
+  publish-pypi:
+    name: Publish PyPI package
+    needs:
+      - lint-python
+    uses: kuba2k2/kuba2k2/.github/workflows/publish-pypi.yml@master
+    secrets:
+      PYPI_TOKEN: ${{ secrets.PYPI_TOKEN }}
