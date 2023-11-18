@@ -8,10 +8,11 @@ license = "MIT"
 [tool.poetry.dependencies]
 python = "^3.7"
 pyserial = "^3.5"
-pycryptodomex = {version = "^3.16.0", optional = true}
+pycryptodome = {version = "^3.16.0", optional = true}
+py-datastruct = "^1.0.0"
 
 [tool.poetry.extras]
-cli = ["pycryptodomex"]
+cli = ["pycryptodome"]
 
 [tool.poetry.dev-dependencies]
 black = "^22.6.0"

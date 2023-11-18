@@ -2,24 +2,23 @@
 
 import json
 import os
-import re
 from json import JSONDecodeError
 from pathlib import Path
 from struct import unpack
-from typing import List
+from typing import List, Optional
+from warnings import warn
 
-KEY_MASTER = b"qwertyuiopasdfgh"
-# FF's encrypted using master key
-KEY_MAGIC = "46DCED0E672F3B70AE1276A3F8712E03"
-KEY_PART_1 = b"8710_2M"
-KEY_PART_2 = b"HHRRQbyemofrtytf"
+from .kvstorage import (
+    KEY_MASTER,
+    MAGIC_DATA_1,
+    MAGIC_DATA_2,
+    MAGIC_KEY,
+    KVStorage,
+    make_data_aes,
+)
 
-# don't complain vscode, please
-goto = None
-label = None
 
-
-def check_crc(crc_read: int, data: bytearray) -> bool:
+def check_crc(crc_read: int, data: bytes) -> bool:
     out = 0
     for b in data:
         out += b
@@ -43,6 +42,11 @@ class TuyaStorage:
     indexes: dict
 
     def __init__(self, flash_sz: int = 0xE000, swap_flash_sz: int = None) -> None:
+        warn(
+            "TuyaStorage class is deprecated - please migrate "
+            "to KVStorage or update your software version",
+            stacklevel=2,
+        )
         if swap_flash_sz is not None:
             print("swap_flash_sz= is deprecated")
         self.set_flash_sz(flash_sz)
@@ -89,48 +93,21 @@ class TuyaStorage:
 
     @staticmethod
     def make_inner_key(inner_key: bytes) -> bytes:
-        key = bytearray(0x10)
-        for i in range(0, 16):
-            key[i] = KEY_PART_1[i & 3] + KEY_PART_2[i]
-        for i in range(16):
-            key[i] = (key[i] + inner_key[i]) % 256
-        return bytes(key)
+        return make_data_aes(inner_key=inner_key)
 
     @staticmethod
-    def parse_user_param_key(value: str) -> dict:
-        value = re.sub(r"([^{}\[\]:,]+)", r'"\1"', value)
-        value = re.sub(r'"([1-9][0-9]*|0)"', r"\1", value)
-        value = re.sub(",}", "}", value)
+    def parse_user_param_key(value: str) -> Optional[dict]:
         try:
-            value = json.loads(value)
+            return KVStorage.parse_user_param_key(value)
         except Exception:
             return None
-        value = dict(sorted(value.items()))
-        return value
 
     @staticmethod
-    def find_user_param_key(data: bytes) -> dict:
-        patterns = [b",crc:", b",module:", b"Jsonver:"]
-        pos = -1
-        for pattern in patterns:
-            match_found = False
-            pos = data.find(pattern, 0)
-            while pos != -1:
-                if data[pos + len(pattern)] != 0x00:
-                    match_found = True
-                    break
-                pos = data.find(pattern, pos + 1)
-            if match_found:
-                break
-        if pos == -1:
+    def find_user_param_key(data: bytes) -> Optional[dict]:
+        result = KVStorage.find_user_param_key(data)
+        if not result:
             return None
-        start = data.rfind(b"\x00", 0, pos) + 1
-        if not start:
-            return None
-        end = data.find(b"\x00", start)
-        if end == -1:
-            return None
-        upk = data[start:end].decode()
+        _, upk = result
         return TuyaStorage.parse_user_param_key(upk)
 
     def load(self, file: str) -> int:
@@ -139,51 +116,50 @@ class TuyaStorage:
             filedata = f.read()
         return self.load_raw(filedata)
 
-    def load_raw(self, filedata: bytes, allow_incomplete: bool = False) -> int:
-        magic = bytes.fromhex(KEY_MAGIC) * 4
-        try:
-            pos = filedata.index(magic)
-            pos -= 32  # rewind to block start
-        except ValueError:
+    def load_raw(
+        self, filedata: bytes, allow_incomplete: bool = False
+    ) -> Optional[int]:
+        result = KVStorage.find_storage(filedata)
+        if not result:
             return None
+        pos, storage = result
         self.indexes = {}
-        self.data = filedata[pos:]
+        self.data = storage
         return pos
 
     def save(self, file: str):
         with open(file, "wb") as f:
             f.write(self.data)
 
-    def block(self, i: int, new: bytearray = None) -> bytearray:
+    def block(self, i: int, new: bytes = None) -> bytes:
         if new:
             self.data[i * self.block_sz : (i + 1) * self.block_sz] = new
             return new
         return self.data[i * self.block_sz : (i + 1) * self.block_sz]
 
-    def page(self, ib: int, ip: int, size: int = 0) -> bytearray:
+    def page(self, ib: int, ip: int, size: int = 0) -> bytes:
         if not size:
             size = self.page_sz
         return self.block(ib + 1)[ip * self.page_sz : ip * self.page_sz + size]
 
     def decrypt(self) -> bool:
         try:
-            from Cryptodome.Cipher import AES
+            from Crypto.Cipher import AES
         except (ImportError, ModuleNotFoundError):
             raise ImportError(
-                "PyCryptodomex dependency is required for storage decryption. "
-                "Install it with: pip install pycryptodomex"
+                "PyCryptodome dependency is required for storage decryption. "
+                "Install it with: pip install pycryptodome"
             )
 
         aes = AES.new(KEY_MASTER, AES.MODE_ECB)
         master = self.block(0, aes.decrypt(self.block(0)))
         magic, crc, key = unpack("<II16s", master[0:24])
-        if not check_magic(magic, 0x13579753):
+        if not check_magic(magic, MAGIC_KEY):
             return False
         if not check_crc(crc, key):
             return False
 
-        key = self.make_inner_key(key)
-        aes = AES.new(key, AES.MODE_ECB)
+        aes = make_data_aes(inner_key=key)
         i = 0
         while True:
             block = self.block(i + 1)
@@ -192,7 +168,7 @@ class TuyaStorage:
                 break
             block = self.block(i + 1, aes.decrypt(block))
             magic, crc, _ = unpack("<IIH", block[0:10])
-            if not check_magic(magic, 0x98761234, 0x135726AB):
+            if not check_magic(magic, MAGIC_DATA_1, MAGIC_DATA_2):
                 break
             if not check_crc(crc, block[8:]):
                 break
