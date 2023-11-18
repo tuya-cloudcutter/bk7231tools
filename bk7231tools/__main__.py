@@ -347,6 +347,7 @@ def dissect_dump_file(args):
         result = KVStorage.find_user_param_key(app_code)
         if not result:
             print("\t- not found!")
+            break
         _, upk = result
         upk = KVStorage.parse_user_param_key(upk)
         break
