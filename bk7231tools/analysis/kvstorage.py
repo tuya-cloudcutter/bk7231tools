@@ -335,7 +335,10 @@ class KVStorage(DataStruct):
             pass
         # Tuya's weird JSON
         if index.name == "user_param_key":
-            return self.parse_user_param_key(value)
+            try:
+                return self.parse_user_param_key(value)
+            except JSONDecodeError:
+                raise RuntimeError(f"Couldn't parse UPK: {value}")
         # something else?
         return value
 
