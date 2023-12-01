@@ -303,7 +303,12 @@ def dissect_dump_file(args):
             break
         pos, storage_data = result
         aes = AES.new(key=KEY_MASTER, mode=AES.MODE_ECB)
-        kvs = KVStorage.unpack(storage_data, aes=aes)
+        try:
+            kvs = KVStorage.unpack(storage_data, aes=aes)
+        except Exception:
+            print("!!! Couldn't unpack KVStorage, perhaps dump file is invalid?")
+            traceback.print_exc()
+            break
         keys = list(kvs.indexes.keys())
         print(f"\t{pos:#06x}: {kvs.length // 1024:d} KiB - {len(keys)} keys")
         print("\n".join(f"\t- '{key}'" for key in keys))
@@ -311,7 +316,12 @@ def dissect_dump_file(args):
             dumpfile_name = Path(dumpfile).stem
 
             out_name = os.path.join(output_directory, f"{dumpfile_name}_storage.json")
-            kvs_data = kvs.read_all_values_parsed()
+            try:
+                kvs_data = kvs.read_all_values_parsed()
+            except Exception:
+                print("!!! Couldn't read parsed KVS values")
+                traceback.print_exc()
+                break
             with open(out_name, "w") as f:
                 print(f"\t\textracted all keys to {out_name}")
                 json.dump(kvs_data, f, indent="\t")
