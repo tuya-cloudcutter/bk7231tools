@@ -60,7 +60,7 @@ class ProtocolType(Enum):
         (0x09, LONG),  # CMD_FlashRead4K
         (0x0F, LONG),  # CMD_FlashErase
     ]
-    BASIC_DEFAULT = BASIC_TUYA
+    BASIC_DEFAULT = BASIC_BEKEN
 
 
 # list of protocols with verified command support

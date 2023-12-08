@@ -72,6 +72,9 @@ class BK7231CmdChip(BK7231Protocol):
             self.chip_info, _ = CHIP_BY_CRC[crc]
             # read the protocol here already - it might not support BootVersion
             self.protocol_type = PROTOCOLS.get(self.chip_info, ProtocolType.UNKNOWN)
+        else:
+            # unknown bootloader version - assume minimal protocol support
+            self.protocol_type = ProtocolType.BASIC_DEFAULT
 
         # try BK7231S chip info command
         command = BkBootVersionCmnd()
@@ -89,7 +92,7 @@ class BK7231CmdChip(BK7231Protocol):
             default = ProtocolType.FULL
         else:
             self.chip_info = response.version.decode().strip("\x00\x20")
-            default = ProtocolType.BASIC_DEFAULT
+            default = ProtocolType.BASIC_TUYA
 
         # get protocol by chip info or SCTRL_CHIP_ID
         # if not set, use `default`
