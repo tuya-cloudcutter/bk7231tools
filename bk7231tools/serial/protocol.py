@@ -89,7 +89,8 @@ PROTOCOLS = {
 # NOTE: the values here are RAW, as received from the chip. They need to be XOR'ed to represent the real CRC.
 CHIP_BY_CRC = {
     # bl_bk7231n_1.0.1_34B7.bin
-    0xBF9C2D66: ("BK7231N", "1.0.1"),
+    0xBF9C2D66: ("BK7231N", "1.0.1"),  # 0..256, exclusive
+    0x1EBE6E45: ("BK7231N", "1.0.1"),  # 0..256, inclusive
     # bl_bk7231q_6AFA.bin
     0x0FDCE109: ("BK7231Q", None),
     # bl_bk7231q_tysdk_03ED.bin
