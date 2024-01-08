@@ -62,7 +62,9 @@ class BK7231CmdFlash(BK7231CmdChip):
     }
 
     flash_id: bytes = None
-    retries: int = 20
+    read_retries: int = 20
+    # flash has limited lifespan so don't do too many retries
+    retries: int = 3
 
     def flash_write_bytes(
         self,
@@ -88,7 +90,7 @@ class BK7231CmdFlash(BK7231CmdChip):
         self,
         start: int,
         data: bytes,
-        crc_check: bool = False,
+        crc_check: bool = True,
         dry_run: bool = False,
     ):
         start = fix_addr(start)
@@ -99,10 +101,20 @@ class BK7231CmdFlash(BK7231CmdChip):
         if dry_run:
             self.info(f" -> would write {len(data)} bytes to 0x{start:X}")
             return True
-        command = BkFlashWrite4KCmnd(start, data)
-        self.command(command)
-        if crc_check:
-            self.check_crc(start, data)
+        j = 0
+        while True:
+            try:
+                command = BkFlashWrite4KCmnd(start, data)
+                self.command(command)
+                if crc_check:
+                    self.check_crc(start, data)
+                break
+            except ValueError as e:
+                self.warn(f"Writing 4k failure ({e}), retrying (attempt {j})")
+                j += 1
+                if j > self.retries:
+                    raise
+                self.flash_erase_block(start, EraseSize.SECTOR_4K)
 
     def flash_read(
         self,
@@ -125,7 +137,8 @@ class BK7231CmdFlash(BK7231CmdChip):
             addr = start + i * 4096
             progress = i / length * 100.0
             self.info(f"Reading 4k page at 0x{addr:06X} ({progress:.2f}%)")
-            for j in range(self.retries):
+            j = 0
+            while True:
                 try:
                     command = BkFlashRead4KCmnd(addr)
                     response: BkFlashRead4KResp = self.command(command)
@@ -134,6 +147,9 @@ class BK7231CmdFlash(BK7231CmdChip):
                     break
                 except ValueError as e:
                     self.warn(f"Reading failure ({e}), retrying (attempt {j})")
+                    j += 1
+                    if j > self.read_retries:
+                        raise
             yield response.data
 
     def flash_read_reg8(self, cmd: int) -> int:
@@ -212,5 +228,15 @@ class BK7231CmdFlash(BK7231CmdChip):
         if dry_run:
             self.info(f" -> would erase {size.name} at 0x{start:X}")
             return True
-        command = BkFlashEraseBlockCmnd(size, start)
-        self.command(command)
+        j = 0
+        while True:
+            try:
+                command = BkFlashEraseBlockCmnd(size, start)
+                self.command(command)
+                break
+            except ValueError as e:
+                self.warn(f"Erasing failure ({e}), retrying (attempt {j})")
+                j += 1
+                if j > self.retries:
+                    raise
+
