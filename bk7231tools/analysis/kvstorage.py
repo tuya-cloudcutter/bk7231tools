@@ -220,7 +220,7 @@ class KVStorage(DataStruct):
             pos -= 32  # rewind to block start
         except ValueError:
             return None
-        return pos, data[pos:]
+        return pos, data[pos:pos+0x8000]
 
     @staticmethod
     def find_user_param_key(data: bytes) -> Optional[Tuple[int, str]]:
