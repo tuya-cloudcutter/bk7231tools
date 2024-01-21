@@ -308,7 +308,8 @@ class KVStorage(DataStruct):
         for part in index.parts_data:
             block_id = part.block_id
             if block_id not in self.blocks:
-                raise RuntimeError(f"Block by ID {block_id} does not exist")
+                warning(f"Block by ID {block_id} does not exist, returning empty")
+                return value
             for page_id in range(part.page_id_start, part.page_id_end + 1):
                 page = self.blocks[block_id].get(page_id, None)
                 if page is None:
