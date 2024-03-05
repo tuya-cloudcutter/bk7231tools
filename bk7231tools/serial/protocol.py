@@ -28,6 +28,7 @@ class ProtocolType(Enum):
         (0x0E, SHORT),  # CMD_Reboot
         (0x0F, SHORT),  # CMD_SetBaudRate
         (0x10, SHORT),  # CMD_CheckCRC
+        (0x11, SHORT),  # CMD_ReadBootVersion
         (0x70, SHORT),  # CMD_RESET
         (0xAA, SHORT),  # CMD_StayRom
         (0x06, LONG),  # CMD_FlashWrite
