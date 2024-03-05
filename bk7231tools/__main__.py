@@ -382,6 +382,7 @@ def connect_device(device, baudrate, timeout, debug):
     items = [
         f"Chip info: {s.chip_info}",
         f"Flash ID: {s.flash_id.hex(' ', -1) if s.flash_id else None}",
+        f"Flash size: {hex(s.flash_size)}",
         f"Protocol: {s.protocol_type.name}",
     ]
     print("Connected!", " / ".join(items))

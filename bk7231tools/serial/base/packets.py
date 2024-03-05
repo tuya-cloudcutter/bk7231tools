@@ -5,6 +5,12 @@ from enum import IntEnum
 from struct import calcsize, pack, unpack
 from typing import Dict, Type
 
+PACKET_CMND_PREAMBLE = b"\x01\xE0\xFC"
+PACKET_CMND_LONG = b"\xFF\xF4"
+PACKET_RESP_PREAMBLE = b"\x04\x0E"
+PACKET_RESP_DATA = b"\x01\xE0\xFC"
+PACKET_RESP_LONG = b"\xF4"
+
 
 class EraseSize(IntEnum):
     SECTOR_4K = 0x20
@@ -282,6 +288,7 @@ class BkFlashEraseBlockCmnd(Packet):
     def deserialize(cls, data: bytes) -> "Packet":
         packet: "BkFlashEraseBlockCmnd" = super().deserialize(data)
         packet.erase_size = EraseSize(packet.erase_size)
+        return packet
 
 
 RESPONSE_TABLE: Dict[Type[Packet], Type[Packet]] = {
