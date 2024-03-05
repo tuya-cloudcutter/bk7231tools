@@ -154,6 +154,7 @@ class BK7231SerialCmdHLFlash(BK7231SerialInterface):
                 self.flash_write_bytes(
                     addr,
                     block,
+                    crc_check=crc_check,
                     dry_run=dry_run,
                 )
                 yield len(block)
@@ -200,6 +201,7 @@ class BK7231SerialCmdHLFlash(BK7231SerialInterface):
                 self.flash_write_4k(
                     addr,
                     block,
+                    crc_check=crc_check,
                     dry_run=dry_run,
                 )
             yield len(block)

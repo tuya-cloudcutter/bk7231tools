@@ -92,7 +92,7 @@ class BK7231SerialInterface(BK7231SerialData):
         self,
         start: int,
         data: bytes,
-        crc_check: bool = False,
+        crc_check: bool = True,
         dry_run: bool = False,
     ) -> None: ...
 
