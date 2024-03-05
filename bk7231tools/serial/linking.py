@@ -31,6 +31,12 @@ class BK7231SerialLinking(BK7231SerialInterface):
             self.flash_read_id()
         except NotImplementedError:
             pass
+        if not self.flash_size and self.flash_params:
+            self.flash_size = self.flash_params["size"]
+        if not self.flash_size and self.bootloader_type.value.flash_size:
+            self.flash_size = self.bootloader_type.value.flash_size
+        if not self.flash_size:
+            self.flash_size = self.flash_detect_size()
 
     def close(self):
         if self.serial and not self.serial.closed:

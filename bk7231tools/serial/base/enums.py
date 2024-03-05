@@ -68,72 +68,74 @@ class Bootloader:
     crc: int
     chip: ChipType
     protocol: ProtocolType
-    version: Optional[str]
+    version: Optional[str] = None
+    flash_size: int = 0
 
 
 class BootloaderType(Enum):
     # bl_bk7231n_1.0.1_34B7.bin
     BK7231N_1_0_1 = Bootloader(
-        0x1EBE6E45,
-        ChipType.BK7231N,
-        ProtocolType.FULL,
-        "1.0.1",
+        crc=0x1EBE6E45,
+        chip=ChipType.BK7231N,
+        protocol=ProtocolType.FULL,
+        version="1.0.1",
     )
     # bl_bk7231q_6AFA.bin
     BK7231Q_1 = Bootloader(
-        0x0FDCE109,
-        ChipType.BK7231Q,
-        ProtocolType.BASIC_BEKEN,
-        None,
+        crc=0x0FDCE109,
+        chip=ChipType.BK7231Q,
+        protocol=ProtocolType.BASIC_BEKEN,
     )
     # bl_bk7231q_tysdk_03ED.bin
     BK7231Q_2 = Bootloader(
-        0x00A5C153,
-        ChipType.BK7231Q,
-        ProtocolType.BASIC_BEKEN,
-        None,
+        crc=0x00A5C153,
+        chip=ChipType.BK7231Q,
+        protocol=ProtocolType.BASIC_BEKEN,
     )
     # bl_bk7231s_1.0.1_79A6.bin
     BK7231S_1_0_1 = Bootloader(
-        0x3E13578E,
-        ChipType.BK7231T,
-        ProtocolType.BASIC_TUYA,
-        "1.0.1",
+        crc=0x3E13578E,
+        chip=ChipType.BK7231T,
+        protocol=ProtocolType.BASIC_TUYA,
+        version="1.0.1",
+        flash_size=0x200_000,
     )
     # bl_bk7231s_1.0.3_DAAE.bin
     BK7231S_1_0_3 = Bootloader(
-        0xB4CE1BB2,
-        ChipType.BK7231T,
-        ProtocolType.BASIC_TUYA,
-        "1.0.3",
+        crc=0xB4CE1BB2,
+        chip=ChipType.BK7231T,
+        protocol=ProtocolType.BASIC_TUYA,
+        version="1.0.3",
+        flash_size=0x200_000,
     )
     # bl_bk7231s_1.0.5_4FF7.bin
     BK7231S_1_0_5 = Bootloader(
-        0x45AB3E47,
-        ChipType.BK7231T,
-        ProtocolType.BASIC_TUYA,
-        "1.0.5",
+        crc=0x45AB3E47,
+        chip=ChipType.BK7231T,
+        protocol=ProtocolType.BASIC_TUYA,
+        version="1.0.5",
+        flash_size=0x200_000,
     )
     # bl_bk7231s_1.0.6_625D.bin
     BK7231S_1_0_6 = Bootloader(
-        0x1A3436AC,
-        ChipType.BK7231T,
-        ProtocolType.BASIC_TUYA,
-        "1.0.6",
+        crc=0x1A3436AC,
+        chip=ChipType.BK7231T,
+        protocol=ProtocolType.BASIC_TUYA,
+        version="1.0.6",
+        flash_size=0x200_000,
     )
     # bl_bk7252_0.1.3_F4D3.bin
     BK7252_0_1_3 = Bootloader(
-        0xC6064AF3,
-        ChipType.BK7252,
-        ProtocolType.BASIC_BEKEN,
-        "0.1.3",
+        crc=0xC6064AF3,
+        chip=ChipType.BK7252,
+        protocol=ProtocolType.BASIC_BEKEN,
+        version="0.1.3",
     )
     # bootloader_7252_2M_uart1_log_20190828.bin
     BK7252_SDK = Bootloader(
-        0x1C5D83D9,
-        ChipType.BK7252,
-        ProtocolType.BASIC_BEKEN,
-        None,
+        crc=0x1C5D83D9,
+        chip=ChipType.BK7252,
+        protocol=ProtocolType.BASIC_BEKEN,
     )
 
     @staticmethod

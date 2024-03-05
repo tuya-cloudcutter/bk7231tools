@@ -21,8 +21,8 @@ class BK7231SerialData:
 
     flash_params: dict = None
     flash_id: bytes = None
-    flash_size: int = 0x200000
-    crc_speed_bps: int = 400000
+    flash_size: int = 0
+    crc_speed_bps: int = 400_000
 
     read_retries: int = 20
     # flash has limited lifespan so don't do too many retries

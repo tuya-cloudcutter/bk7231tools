@@ -71,6 +71,20 @@ class BK7231SerialCmdLLFlash(BK7231SerialInterface):
         )
         return self.flash_params
 
+    def flash_detect_size(self) -> int:
+        sizes = [0x100_000, 0x200_000, 0x400_000, 0x800_000, 0x1000_000]
+
+        command = BkFlashRead4KCmnd(0)
+        response: BkFlashRead4KResp = self.command(command)
+        start_data = response.data
+
+        for size in sizes:
+            command = BkFlashRead4KCmnd(size)
+            response: BkFlashRead4KResp = self.command(command)
+            if start_data == response.data:
+                return size
+        raise ValueError("Couldn't detect flash chip size!")
+
     def flash_read_4k(
         self,
         start: int,
