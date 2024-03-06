@@ -69,7 +69,7 @@ class BK7231SerialCmdHLFlash(BK7231SerialInterface):
         length: int,
         crc_check: bool = True,
     ) -> Generator[bytes, None, None]:
-        if start + length > self.flash_size:
+        if self.flash_size and start + length > self.flash_size:
             raise ValueError(
                 f"Read length 0x{length:X} is larger than "
                 f"flash memory size (0x{self.flash_size:X})"
@@ -124,7 +124,7 @@ class BK7231SerialCmdHLFlash(BK7231SerialInterface):
         addr = start
         if start & 0xFFF and not really_erase:
             raise ValueError(f"Start address not on 4K boundary; sector erase needed")
-        if end > self.flash_size:
+        if self.flash_size and end > self.flash_size:
             raise ValueError(f"Input data is larger than flash memory size")
 
         # unprotect flash memory for BK7231N
