@@ -78,6 +78,7 @@ class BK7231SerialCmdHLFlash(BK7231SerialInterface):
 
         block_count = (length - 1) // 4096 + 1
         block_start = start & ~0xFFF
+        start = start & 0xFFF
         for i in range(block_count):
             progress = i / block_count * 100.0
             self.info(f"Reading 4k page at 0x{block_start:06X} ({progress:.2f}%)")
