@@ -4,7 +4,7 @@ from binascii import crc32
 from io import BytesIO
 from typing import IO, Generator
 
-from .base import BK7231SerialInterface, EraseSize, ProtocolType
+from .base import BK7231SerialInterface, BkProtocolType, EraseSize
 
 
 class BK7231SerialCmdHLFlash(BK7231SerialInterface):
@@ -128,7 +128,7 @@ class BK7231SerialCmdHLFlash(BK7231SerialInterface):
             raise ValueError(f"Input data is larger than flash memory size")
 
         # unprotect flash memory for BK7231N
-        if self.protocol_type == ProtocolType.FULL:
+        if self.protocol_type == BkProtocolType.FULL:
             self.info("Trying to unprotect flash memory...")
             self.flash_unprotect()
 

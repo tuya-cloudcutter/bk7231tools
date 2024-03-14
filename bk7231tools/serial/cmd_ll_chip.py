@@ -3,7 +3,7 @@
 from binascii import crc32
 from math import ceil
 
-from .base import BK7231SerialInterface, ProtocolType
+from .base import BK7231SerialInterface, BkProtocolType
 from .base.packets import (
     BkCheckCrcCmnd,
     BkCheckCrcResp,
@@ -61,7 +61,7 @@ class BK7231SerialCmdLLChip(BK7231SerialInterface):
             )
             self.serial.timeout = ceil(timeout_minimum)
         # fix for BK7231N which also counts the end offset
-        if self.protocol_type == ProtocolType.FULL:
+        if self.protocol_type == BkProtocolType.FULL:
             end -= 1
         command = BkCheckCrcCmnd(start, end)
         response: BkCheckCrcResp = self.command(command)

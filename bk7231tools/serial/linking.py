@@ -5,7 +5,7 @@ from time import sleep
 
 from serial import Timeout
 
-from .base import BK7231SerialInterface, BootloaderType, ChipType, ProtocolType
+from .base import BK7231SerialInterface, BkBootloaderType, BkChipType, BkProtocolType
 from .base.packets import (
     BkBootVersionCmnd,
     BkBootVersionResp,
@@ -77,7 +77,7 @@ class BK7231SerialLinking(BK7231SerialInterface):
         # try bootloader CRC matching first
         # all known protocols support this command
         crc = self.read_flash_range_crc(0, 256)
-        self.bootloader_type = BootloaderType.get_by_crc(crc)
+        self.bootloader_type = BkBootloaderType.get_by_crc(crc)
 
         if self.bootloader_type:
             # if bootloader is known, set protocol_type and chip_type
@@ -85,15 +85,14 @@ class BK7231SerialLinking(BK7231SerialInterface):
             self.chip_type = self.bootloader_type.value.chip
         else:
             # if bootloader is not known, try to guess the chip type
+            self.chip_type = None
             data = self.flash_read_bytes(start=0, length=256 + 1, crc_check=False)
             if crc == crc32(data[0:257]):
-                # BK7231N BootROM protocol - CRC range end-inclusive
-                self.protocol_type = ProtocolType.FULL
-                self.chip_type = ChipType.BK7231N
+                # BK72xx BootROM protocol - CRC range end-inclusive
+                self.protocol_type = BkProtocolType.FULL
             elif crc == crc32(data[0:256]):
-                # assume minimal protocol support
-                self.protocol_type = ProtocolType.BASIC_BEKEN
-                self.chip_type = None
+                # BK72xx Bootloader protocol - assume minimal command support
+                self.protocol_type = BkProtocolType.BASIC_BEKEN
             else:
                 # CRC does not match - fail
                 raise ValueError("CRC mismatch while checking chip type!")

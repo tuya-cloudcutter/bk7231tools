@@ -4,7 +4,7 @@ from typing import Callable, Optional
 
 from serial import Serial
 
-from .enums import BootloaderType, ChipType, ProtocolType
+from .enums import BkBootloader, BkBootloaderType, BkChipType, BkProtocolType
 
 
 class BK7231SerialData:
@@ -13,9 +13,9 @@ class BK7231SerialData:
     link_timeout: float
     cmnd_timeout: float
 
-    protocol_type: ProtocolType = None
-    chip_type: Optional[ChipType] = None
-    bootloader_type: Optional[BootloaderType] = None
+    protocol_type: BkProtocolType = None
+    chip_type: Optional[BkChipType] = None
+    bootloader_type: Optional[BkBootloaderType] = None
     bk_boot_version: Optional[str] = None
     bk_chip_id: Optional[int] = None
 
