@@ -122,6 +122,13 @@ class BK7231SerialProtocol(BK7231SerialInterface):
         else:
             self.require_protocol(packet)
 
+        # correct flash offsets to bypass bootloader protection
+        if packet.OFFSET_FIELDS and self.boot_protection_bypass:
+            for field in packet.OFFSET_FIELDS:
+                offset = getattr(packet, field)
+                offset = self.fix_addr(offset)
+                setattr(packet, field, offset)
+
         self.debug("<- TX:", shorten(str(packet), 64))
 
         self.write(self.encode(packet))
@@ -187,6 +194,12 @@ class BK7231SerialProtocol(BK7231SerialInterface):
                     resp = response.hex()
                 raise ValueError(f"Couldn't deserialize response: {resp}")
             self.debug(f"-> RX ({size}):", shorten(str(response), 64))
+            # check response status code, if available
+            if response.STATUS_FIELDS:
+                for field in response.STATUS_FIELDS:
+                    status = getattr(response, field)
+                    if status != 0:
+                        raise ValueError(f"Non-zero status code: {response}")
             return response
 
         return True

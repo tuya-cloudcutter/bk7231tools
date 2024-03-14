@@ -3,7 +3,7 @@
 from dataclasses import astuple, dataclass
 from enum import IntEnum
 from struct import calcsize, pack, unpack
-from typing import Dict, Type
+from typing import Dict, List, Type
 
 PACKET_CMND_PREAMBLE = b"\x01\xE0\xFC"
 PACKET_CMND_LONG = b"\xFF\xF4"
@@ -23,6 +23,8 @@ class Packet:
     IS_LONG: bool = False
     HAS_RESP_OTHER: bool = False
     HAS_RESP_SAME: slice = None
+    STATUS_FIELDS: List[str] = None
+    OFFSET_FIELDS: List[str] = None
 
     def serialize(self) -> bytes:
         fields = astuple(self)
@@ -114,6 +116,7 @@ class BkCheckCrcCmnd(Packet):
     CODE = 0x10  # CMD_CheckCRC
     FORMAT = "<II"
     HAS_RESP_OTHER = True
+    OFFSET_FIELDS = ["start", "end"]
     start: int
     end: int
 
@@ -146,6 +149,7 @@ class BkFlashWriteCmnd(Packet):
     IS_LONG = True
     HAS_RESP_OTHER = True
     HAS_RESP_SAME = slice(1, 5)
+    OFFSET_FIELDS = ["start"]
     start: int
     data: bytes
 
@@ -154,6 +158,7 @@ class BkFlashWriteCmnd(Packet):
 class BkFlashWriteResp(Packet):
     CODE = 0x06  # CMD_FlashWrite
     FORMAT = "<BIB"
+    STATUS_FIELDS = ["status"]
     status: int
     start: int
     written: int
@@ -166,6 +171,7 @@ class BkFlashWrite4KCmnd(Packet):
     IS_LONG = True
     HAS_RESP_OTHER = True
     HAS_RESP_SAME = slice(1, 5)
+    OFFSET_FIELDS = ["start"]
     start: int
     data: bytes
 
@@ -174,6 +180,7 @@ class BkFlashWrite4KCmnd(Packet):
 class BkFlashWrite4KResp(Packet):
     CODE = 0x07  # CMD_FlashWrite4K
     FORMAT = "<BI"
+    STATUS_FIELDS = ["status"]
     status: int
     start: int
 
@@ -185,6 +192,7 @@ class BkFlashRead4KCmnd(Packet):
     IS_LONG = True
     HAS_RESP_OTHER = True
     HAS_RESP_SAME = slice(1, 5)
+    OFFSET_FIELDS = ["start"]
     start: int
 
 
@@ -192,6 +200,7 @@ class BkFlashRead4KCmnd(Packet):
 class BkFlashRead4KResp(Packet):
     CODE = 0x09  # CMD_FlashRead4K
     FORMAT = "<BI$"
+    STATUS_FIELDS = ["status"]
     status: int
     start: int
     data: bytes
@@ -281,6 +290,7 @@ class BkFlashEraseBlockCmnd(Packet):
     FORMAT = "<BI"
     IS_LONG = True
     HAS_RESP_SAME = slice(1, 6)
+    OFFSET_FIELDS = ["start"]
     erase_size: EraseSize
     start: int
 

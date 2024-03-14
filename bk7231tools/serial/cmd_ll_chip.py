@@ -16,10 +16,10 @@ from .base.packets import (
 
 class BK7231SerialCmdLLChip(BK7231SerialInterface):
     def fix_addr(self, addr: int) -> int:
-        if self.flash_size == 0:
+        if self.flash_size == 0 or not self.boot_protection_bypass:
             return addr
-        addr &= 0x1FFFFF
-        addr |= 0x200000
+        addr &= self.flash_size - 1
+        addr |= self.flash_size
         return addr
 
     def reboot_chip(self) -> None:
@@ -36,11 +36,6 @@ class BK7231SerialCmdLLChip(BK7231SerialInterface):
         self.command(command)
 
     def read_flash_range_crc(self, start: int, end: int) -> int:
-        start = self.fix_addr(start)
-        end = self.fix_addr(end)
-        # probably reading whole flash CRC
-        if end == 0x200000:
-            end += 0x200000
         # command arguments are (incl., excl.)
         if start == end:
             raise ValueError("Start and end must differ! (end is exclusive)")

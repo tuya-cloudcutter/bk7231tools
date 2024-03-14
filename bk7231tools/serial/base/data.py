@@ -24,6 +24,7 @@ class BK7231SerialData:
     flash_id: bytes = None
     flash_size: int = 0
     flash_size_detected: bool = False
+    boot_protection_bypass: bool = True
     crc_speed_bps: int = 400_000
 
     read_retries: int = 20

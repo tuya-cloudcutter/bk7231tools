@@ -74,33 +74,36 @@ class BK7231SerialCmdLLFlash(BK7231SerialInterface):
     def flash_detect_size(self) -> int:
         self.info("Flash size - detecting...")
         sizes = [0.5, 1, 2, 4, 8, 16]  # MiB
-
-        command = BkFlashRead4KCmnd(0)
-        response: BkFlashRead4KResp = self.command(command)
-        start_data = response.data
-
-        for size in sizes:
-            size *= 0x100_000
-            size = int(size)
-            self.info(f" - Checking wraparound at {hex(size)}")
-            command = BkFlashRead4KCmnd(start=size)
-            response: BkFlashRead4KResp = self.command(command)
-            if start_data == response.data:
-                self.info(f"Flash size detected - {hex(size)}")
-                return size
-        raise ValueError("Couldn't detect flash chip size!")
+        # disable bootloader protection bypass
+        self.boot_protection_bypass = False
+        try:
+            start_data = self.flash_read_4k(start=0, crc_check=False)
+            for size in sizes:
+                size *= 0x100_000
+                size = int(size)
+                self.info(f" - Checking wraparound at {hex(size)}")
+                check_data = self.flash_read_4k(start=size, crc_check=False)
+                if start_data == check_data:
+                    self.info(f"Flash size detected - {hex(size)}")
+                    return size
+            raise ValueError("Couldn't detect flash chip size!")
+        finally:
+            self.boot_protection_bypass = True
 
     def flash_read_4k(
         self,
         start: int,
         crc_check: bool = True,
     ) -> bytes:
-        start = self.fix_addr(start)
         attempt = 0
         while True:
             try:
                 command = BkFlashRead4KCmnd(start)
                 response: BkFlashRead4KResp = self.command(command)
+                if len(response.data) != 0x1000:
+                    raise ValueError(
+                        f"Invalid data length received: {len(response.data)}"
+                    )
                 if crc_check:
                     self.check_crc(start, response.data)
                 break
@@ -120,7 +123,6 @@ class BK7231SerialCmdLLFlash(BK7231SerialInterface):
         crc_check: bool = False,
         dry_run: bool = False,
     ) -> None:
-        start = self.fix_addr(start)
         if len(data) > 256:
             raise ValueError(f"Data too long ({len(data)} > 256)")
         if dry_run:
@@ -140,7 +142,6 @@ class BK7231SerialCmdLLFlash(BK7231SerialInterface):
         crc_check: bool = True,
         dry_run: bool = False,
     ) -> None:
-        start = self.fix_addr(start)
         if len(data) > 4096:
             raise ValueError(f"Data too long ({len(data)} > 4096)")
         if len(data) < 4096:
@@ -177,7 +178,6 @@ class BK7231SerialCmdLLFlash(BK7231SerialInterface):
         size: EraseSize,
         dry_run: bool = False,
     ) -> None:
-        start = self.fix_addr(start)
         if dry_run:
             self.info(f" -> would erase {size.name} at 0x{start:X}")
             return
