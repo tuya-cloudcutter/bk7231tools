@@ -23,6 +23,7 @@ class BK7231SerialCmdHLFlash(BK7231SerialInterface):
         b"\x51\x40\x13": 1,
         b"\x51\x40\x14": 1,
         b"\x5E\x40\x14": 1,
+        b"\x85\x42\x15": 1,
         b"\x85\x60\x13": 2,
         b"\x85\x60\x14": 2,
         b"\x85\x60\x16": 2,

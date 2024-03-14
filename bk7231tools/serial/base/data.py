@@ -16,12 +16,14 @@ class BK7231SerialData:
     protocol_type: BkProtocolType = None
     chip_type: Optional[BkChipType] = None
     bootloader_type: Optional[BkBootloaderType] = None
-    bk_boot_version: Optional[str] = None
+    bootloader: Optional[BkBootloader] = None
     bk_chip_id: Optional[int] = None
+    bk_boot_version: Optional[str] = None
 
     flash_params: dict = None
     flash_id: bytes = None
     flash_size: int = 0
+    flash_size_detected: bool = False
     crc_speed_bps: int = 400_000
 
     read_retries: int = 20

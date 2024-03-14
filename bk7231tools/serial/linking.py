@@ -37,6 +37,7 @@ class BK7231SerialLinking(BK7231SerialInterface):
             self.flash_size = self.bootloader_type.value.flash_size
         if not self.flash_size:
             self.flash_size = self.flash_detect_size()
+            self.flash_size_detected = True
 
     def close(self):
         if self.serial and not self.serial.closed:
@@ -83,8 +84,9 @@ class BK7231SerialLinking(BK7231SerialInterface):
             # if bootloader is known, set protocol_type and chip_type
             self.protocol_type = self.bootloader_type.value.protocol
             self.chip_type = self.bootloader_type.value.chip
+            self.bootloader = self.bootloader_type.value
         else:
-            # if bootloader is not known, try to guess the chip type
+            # if bootloader is not known, try to guess the protocol type
             self.chip_type = None
             data = self.flash_read_bytes(start=0, length=256 + 1, crc_check=False)
             if crc == crc32(data[0:257]):
@@ -97,12 +99,18 @@ class BK7231SerialLinking(BK7231SerialInterface):
                 # CRC does not match - fail
                 raise ValueError("CRC mismatch while checking chip type!")
 
+        if self.check_protocol(BkReadRegCmnd):
+            # read BK72xx BootROM SCTRL_CHIP_ID
+            self.bk_chip_id = self.register_read(0x800000)
+            # match the chip by ID
+            if any(c.value == self.bk_chip_id for c in BkChipType):
+                self.chip_type = BkChipType(self.bk_chip_id)
+            else:
+                self.warn(f"Unknown SCTRL_CHIP_ID - {hex(self.bk_chip_id)}")
+
         if self.check_protocol(BkBootVersionCmnd):
-            # read BK7231S boot version
+            # read BK7231T boot version
             command = BkBootVersionCmnd()
             response: BkBootVersionResp = self.command(command)
             if response.version != b"\x07":
                 self.bk_boot_version = response.version.decode().strip("\x00\x20")
-        if self.check_protocol(BkReadRegCmnd):
-            # read BK7231N SCTRL_CHIP_ID
-            self.bk_chip_id = self.register_read(0x800000)

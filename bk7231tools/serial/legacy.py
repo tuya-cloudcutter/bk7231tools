@@ -10,6 +10,7 @@ class BK7231SerialLegacy(BK7231SerialInterface):
             self.bk_boot_version
             or (self.chip_type and self.chip_type.name)
             or (self.bk_chip_id and hex(self.bk_chip_id))
+            or "Unknown"
         )
 
     def read_chip_info(self) -> str:
