@@ -114,3 +114,12 @@ class BK7231SerialLinking(BK7231SerialInterface):
             response: BkBootVersionResp = self.command(command)
             if response.version != b"\x07":
                 self.bk_boot_version = response.version.decode().strip("\x00\x20")
+
+        self.info(
+            f"BK72xx connected - "
+            f"protocol: {self.protocol_type.name}, "
+            f"chip: {self.chip_type and self.chip_type.name}, "
+            f"bootloader: {self.bootloader_type and self.bootloader_type.name}, "
+            f"chip ID: {self.bk_chip_id and hex(self.bk_chip_id)}, "
+            f"boot version: {self.bk_boot_version}"
+        )
