@@ -12,6 +12,13 @@ class BK7231SerialInterface(BK7231SerialData):
 
     def read_chip_info(self) -> str: ...
 
+    def read_flash_4k(
+        self,
+        start: int,
+        count: int = 1,
+        crc_check: bool = True,
+    ) -> bytes: ...
+
     # linking.py
     def connect(self): ...
 
@@ -127,13 +134,6 @@ class BK7231SerialInterface(BK7231SerialData):
         self,
         start: int,
         length: int,
-        crc_check: bool = True,
-    ) -> bytes: ...
-
-    def read_flash_4k(
-        self,
-        start: int,
-        count: int = 1,
         crc_check: bool = True,
     ) -> bytes: ...
 

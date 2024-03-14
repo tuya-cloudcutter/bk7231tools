@@ -102,17 +102,6 @@ class BK7231SerialCmdHLFlash(BK7231SerialInterface):
         assert out.tell() == length
         return out.getvalue()
 
-    def read_flash_4k(
-        self,
-        start: int,
-        count: int = 1,
-        crc_check: bool = True,
-    ) -> bytes:
-        out = BytesIO()
-        for data in self.flash_read(start, count * 4096, crc_check):
-            out.write(data)
-        return out.getvalue()
-
     def program_flash(
         self,
         io: IO[bytes],

@@ -1,5 +1,7 @@
 #  Copyright (c) Kuba Szczodrzyński 2024-3-5.
 
+from io import BytesIO
+
 from .base import BK7231SerialInterface
 
 
@@ -15,6 +17,17 @@ class BK7231SerialLegacy(BK7231SerialInterface):
 
     def read_chip_info(self) -> str:
         return self.chip_info
+
+    def read_flash_4k(
+        self,
+        start: int,
+        count: int = 1,
+        crc_check: bool = True,
+    ) -> bytes:
+        out = BytesIO()
+        for data in self.flash_read(start, count * 4096, crc_check):
+            out.write(data)
+        return out.getvalue()
 
 
 # legacy compatibility only - do not use!
