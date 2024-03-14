@@ -1,6 +1,7 @@
 #  Copyright (c) Kuba Szczodrzyński 2024-3-5.
 
 import struct
+import sys
 from struct import pack, unpack
 from textwrap import shorten
 from time import sleep
@@ -85,7 +86,10 @@ class BK7231SerialProtocol(BK7231SerialInterface):
 
     def write(self, data: bytes) -> None:
         if data:
-            self.verbose(f"<- TX: {data.hex(' ')}")
+            if sys.version_info >= (3, 8):
+                self.verbose(f"<- TX: {data.hex(' ')}")
+            else:
+                self.verbose(f"<- TX: {data.hex()}")
         self.serial.write(data)
         self.serial.flush()
 
@@ -98,7 +102,10 @@ class BK7231SerialProtocol(BK7231SerialInterface):
             data = self.serial.read(1)
 
         if data:
-            self.verbose(f"-> RX: {data.hex(' ')}")
+            if sys.version_info >= (3, 8):
+                self.verbose(f"-> RX: {data.hex(' ')}")
+            else:
+                self.verbose(f"-> RX: {data.hex()}")
         if not count and not until:
             return data[0] if data else 0
         return data
@@ -174,7 +181,11 @@ class BK7231SerialProtocol(BK7231SerialInterface):
             try:
                 response = cls.deserialize(response)
             except struct.error:
-                raise ValueError(f"Partial response received: {response.hex(' ', -1)}")
+                if sys.version_info >= (3, 8):
+                    resp = response.hex(" ", -1)
+                else:
+                    resp = response.hex()
+                raise ValueError(f"Couldn't deserialize response: {resp}")
             self.debug(f"-> RX ({size}):", shorten(str(response), 64))
             return response
 

@@ -105,7 +105,9 @@ class BK7231SerialCmdLLFlash(BK7231SerialInterface):
                     self.check_crc(start, response.data)
                 break
             except ValueError as e:
-                self.warn(f"Reading failure ({e}), retrying (attempt {attempt})")
+                self.warn(
+                    f"Reading failure @ {hex(start)} ({e}), retrying (attempt {attempt})"
+                )
                 attempt += 1
                 if attempt > self.read_retries:
                     raise
@@ -156,7 +158,9 @@ class BK7231SerialCmdLLFlash(BK7231SerialInterface):
                     self.check_crc(start, data)
                 break
             except ValueError as e:
-                self.warn(f"Writing 4k failure ({e}), retrying (attempt {attempt})")
+                self.warn(
+                    f"Writing 4k failure @ {hex(start)} ({e}), retrying (attempt {attempt})"
+                )
                 attempt += 1
                 if attempt > self.write_retries:
                     raise
@@ -184,7 +188,9 @@ class BK7231SerialCmdLLFlash(BK7231SerialInterface):
                 self.command(command)
                 break
             except ValueError as e:
-                self.warn(f"Erasing failure ({e}), retrying (attempt {attempt})")
+                self.warn(
+                    f"Erasing failure @ {hex(start)} ({e}), retrying (attempt {attempt})"
+                )
                 attempt += 1
                 if attempt > self.write_retries:
                     raise
