@@ -21,6 +21,8 @@ from .base.packets import (
     EraseSize,
 )
 
+CRC32_FF_4K = 0xF154670A
+
 
 class BK7231SerialCmdLLFlash(BK7231SerialInterface):
     def flash_read_reg8(self, cmd: int) -> int:
@@ -76,13 +78,14 @@ class BK7231SerialCmdLLFlash(BK7231SerialInterface):
         sizes = [0.5, 1, 2, 4, 8, 16]  # MiB
         # disable bootloader protection bypass
         self.boot_protection_bypass = False
+        safe_offset = 0x11000
         try:
-            start_data = self.flash_read_4k(start=0, crc_check=False)
+            start_data = self.flash_read_4k(start=safe_offset, crc_check=False)
             for size in sizes:
-                size *= 0x100_000
-                size = int(size)
-                self.info(f" - Checking wraparound at {hex(size)}")
-                check_data = self.flash_read_4k(start=size, crc_check=False)
+                size = int(size * 0x100_000)
+                start = size + safe_offset
+                self.info(f" - Checking wraparound at {hex(start)}")
+                check_data = self.flash_read_4k(start=start, crc_check=False)
                 if start_data == check_data:
                     self.info(f"Flash size detected - {hex(size)}")
                     return size
@@ -181,11 +184,46 @@ class BK7231SerialCmdLLFlash(BK7231SerialInterface):
         if dry_run:
             self.info(f" -> would erase {size.name} at 0x{start:X}")
             return
+
+        def do_erase():
+            command = BkFlashEraseBlockCmnd(size, start)
+            self.command(command)
+
+        def do_erase_verify():
+            # readout pre-erase contents
+            self.info(f" - Checking block pre-erase @ {hex(start)}")
+            crc_pre_erase = self.read_flash_range_crc(start, start + 0x1000)
+            if crc_pre_erase == CRC32_FF_4K:
+                # do not use this block for verification if already 0xFF
+                # do not erase either - not necessary
+                self.info(f" - Deferring, block @ {hex(start)} is already erased")
+                return
+            # run the erase command
+            self.info(f" - Trying to erase block @ {hex(start)}")
+            do_erase()
+            # readout post-erase contents
+            self.info(f" - Checking block post-erase @ {hex(start)}")
+            crc_post_erase = self.read_flash_range_crc(start, start + 0x1000)
+            # verify that all bytes are 0xFF
+            if crc_post_erase != CRC32_FF_4K:
+                raise ValueError(
+                    "Erase failed - flash protected; "
+                    f"found non-0xFF bytes @ {hex(start)}"
+                )
+            self.info(f" - Erase succeeded @ {hex(start)}")
+            self.flash_erase_checked = True
+
         attempt = 0
         while True:
             try:
-                command = BkFlashEraseBlockCmnd(size, start)
-                self.command(command)
+                if not self.flash_erase_checked:
+                    if size != EraseSize.SECTOR_4K:
+                        self.warn("Cannot verify erasing in 64K block mode")
+                        do_erase()
+                    else:
+                        do_erase_verify()
+                else:
+                    do_erase()
                 break
             except ValueError as e:
                 self.warn(

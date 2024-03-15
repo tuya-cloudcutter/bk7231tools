@@ -182,7 +182,7 @@ class BK7231SerialProtocol(BK7231SerialInterface):
             check_len = part.stop - part.start
             if response[part] != command[:check_len]:
                 raise ValueError("Invalid response data payload")
-            self.debug(f"-> RX ({size}): Check OK")
+            self.debug(f"-> RX ({size}): Response check OK")
 
         if packet.HAS_RESP_OTHER:
             try:

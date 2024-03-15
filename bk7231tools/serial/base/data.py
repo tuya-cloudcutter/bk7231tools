@@ -24,9 +24,11 @@ class BK7231SerialData:
     flash_id: bytes = None
     flash_size: int = 0
     flash_size_detected: bool = False
+    flash_erase_checked: bool = False
     boot_protection_bypass: bool = True
     crc_speed_bps: int = 400_000
 
+    # these parameters mean "retries", not "attempts"
     read_retries: int = 20
     # flash has limited lifespan so don't do too many retries
     write_retries: int = 3
