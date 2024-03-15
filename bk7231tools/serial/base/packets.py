@@ -25,6 +25,8 @@ class Packet:
     HAS_RESP_SAME: slice = None
     STATUS_FIELDS: List[str] = None
     OFFSET_FIELDS: List[str] = None
+    HEX_FIELDS: List[str] = None
+    DATA_FIELDS: List[str] = None
 
     def serialize(self) -> bytes:
         fields = astuple(self)
@@ -45,64 +47,83 @@ class Packet:
             fields = unpack(cls.FORMAT, data)
         return cls(*fields)
 
+    def __repr__(self) -> str:
+        def repr(field: str) -> str:
+            value = getattr(self, field)
+            if self.HEX_FIELDS and field in self.HEX_FIELDS:
+                return f"{field}=0x{value:X}"
+            if self.OFFSET_FIELDS and field in self.OFFSET_FIELDS:
+                return f"{field}=0x{value:X}"
+            if self.DATA_FIELDS and field in self.DATA_FIELDS:
+                return f"{field}=bytes({len(value)})"
+            return f"{field}={value}"
 
-@dataclass
+        fields = getattr(self.__class__, "__dataclass_fields__")
+        return self.__class__.__qualname__ + f"(" + ", ".join(map(repr, fields)) + ")"
+
+
+@dataclass(repr=False)
 class BkLinkCheckCmnd(Packet):
     CODE = 0x00  # CMD_LinkCheck
     FORMAT = ""
     HAS_RESP_OTHER = True
 
 
-@dataclass
+@dataclass(repr=False)
 class BkLinkCheckResp(Packet):
     CODE = 0x01  # CMD_LinkCheck + 1
     FORMAT = "B"
     value: int
 
 
-@dataclass
+@dataclass(repr=False)
 class BkWriteRegCmnd(Packet):
     CODE = 0x01  # CMD_WriteReg
     FORMAT = "<II"
     HAS_RESP_OTHER = True
     HAS_RESP_SAME = slice(0, 8)
+    HEX_FIELDS = ["address", "value"]
     address: int
     value: int
 
 
-@dataclass
+@dataclass(repr=False)
 class BkWriteRegResp(Packet):
     CODE = 0x01  # CMD_WriteReg
     FORMAT = "<II"
+    HEX_FIELDS = ["address", "value"]
     address: int
     value: int
 
 
-@dataclass
+@dataclass(repr=False)
 class BkReadRegCmnd(Packet):
     CODE = 0x03  # CMD_ReadReg
     FORMAT = "<I"
     HAS_RESP_OTHER = True
     HAS_RESP_SAME = slice(0, 4)
+    HEX_FIELDS = ["address"]
     address: int
 
 
-@dataclass
+@dataclass(repr=False)
 class BkReadRegResp(Packet):
     CODE = 0x03  # CMD_ReadReg
     FORMAT = "<II"
+    HEX_FIELDS = ["address", "value"]
     address: int
     value: int
 
 
-@dataclass
+@dataclass(repr=False)
 class BkRebootCmnd(Packet):
     CODE = 0x0E  # CMD_Reboot
     FORMAT = "B"
+    HEX_FIELDS = ["value"]
     value: int
 
 
-@dataclass
+@dataclass(repr=False)
 class BkSetBaudRateCmnd(Packet):
     CODE = 0x0F  # CMD_SetBaudRate
     FORMAT = "<IB"
@@ -111,7 +132,7 @@ class BkSetBaudRateCmnd(Packet):
     delay_ms: int
 
 
-@dataclass
+@dataclass(repr=False)
 class BkCheckCrcCmnd(Packet):
     CODE = 0x10  # CMD_CheckCRC
     FORMAT = "<II"
@@ -121,28 +142,29 @@ class BkCheckCrcCmnd(Packet):
     end: int
 
 
-@dataclass
+@dataclass(repr=False)
 class BkCheckCrcResp(Packet):
     CODE = 0x10  # CMD_CheckCRC
     FORMAT = "<I"
+    HEX_FIELDS = ["crc32"]
     crc32: int
 
 
-@dataclass
+@dataclass(repr=False)
 class BkBootVersionCmnd(Packet):
     CODE = 0x11  # CMD_ReadBootVersion
     FORMAT = ""
     HAS_RESP_OTHER = True
 
 
-@dataclass
+@dataclass(repr=False)
 class BkBootVersionResp(Packet):
     CODE = 0x11  # CMD_ReadBootVersion
     FORMAT = "$"
     version: bytes
 
 
-@dataclass
+@dataclass(repr=False)
 class BkFlashWriteCmnd(Packet):
     CODE = 0x06  # CMD_FlashWrite
     FORMAT = "<I$"
@@ -150,21 +172,23 @@ class BkFlashWriteCmnd(Packet):
     HAS_RESP_OTHER = True
     HAS_RESP_SAME = slice(1, 5)
     OFFSET_FIELDS = ["start"]
+    LONG_FIELDS = ["data"]
     start: int
     data: bytes
 
 
-@dataclass
+@dataclass(repr=False)
 class BkFlashWriteResp(Packet):
     CODE = 0x06  # CMD_FlashWrite
     FORMAT = "<BIB"
     STATUS_FIELDS = ["status"]
+    OFFSET_FIELDS = ["start"]
     status: int
     start: int
     written: int
 
 
-@dataclass
+@dataclass(repr=False)
 class BkFlashWrite4KCmnd(Packet):
     CODE = 0x07  # CMD_FlashWrite4K
     FORMAT = "<I$"
@@ -172,20 +196,22 @@ class BkFlashWrite4KCmnd(Packet):
     HAS_RESP_OTHER = True
     HAS_RESP_SAME = slice(1, 5)
     OFFSET_FIELDS = ["start"]
+    DATA_FIELDS = ["data"]
     start: int
     data: bytes
 
 
-@dataclass
+@dataclass(repr=False)
 class BkFlashWrite4KResp(Packet):
     CODE = 0x07  # CMD_FlashWrite4K
     FORMAT = "<BI"
     STATUS_FIELDS = ["status"]
+    OFFSET_FIELDS = ["start"]
     status: int
     start: int
 
 
-@dataclass
+@dataclass(repr=False)
 class BkFlashRead4KCmnd(Packet):
     CODE = 0x09  # CMD_FlashRead4K
     FORMAT = "<I"
@@ -196,95 +222,105 @@ class BkFlashRead4KCmnd(Packet):
     start: int
 
 
-@dataclass
+@dataclass(repr=False)
 class BkFlashRead4KResp(Packet):
     CODE = 0x09  # CMD_FlashRead4K
     FORMAT = "<BI$"
     STATUS_FIELDS = ["status"]
+    OFFSET_FIELDS = ["start"]
+    DATA_FIELDS = ["data"]
     status: int
     start: int
     data: bytes
 
 
-@dataclass
+@dataclass(repr=False)
 class BkFlashReg8ReadCmnd(Packet):
     CODE = 0x0C  # CMD_FlashReadSR
     FORMAT = "B"
     IS_LONG = True
     HAS_RESP_OTHER = True
     HAS_RESP_SAME = slice(1, 2)
+    HEX_FIELDS = ["cmd"]
     cmd: int
 
 
-@dataclass
+@dataclass(repr=False)
 class BkFlashReg8ReadResp(Packet):
     CODE = 0x0C  # CMD_FlashReadSR
     FORMAT = "BBB"
+    HEX_FIELDS = ["cmd", "data0"]
     status: int
     cmd: int
     data0: int
 
 
-@dataclass
+@dataclass(repr=False)
 class BkFlashReg8WriteCmnd(Packet):
     CODE = 0x0D  # CMD_FlashWriteSR
     FORMAT = "BB"
     IS_LONG = True
     HAS_RESP_OTHER = True
     HAS_RESP_SAME = slice(1, 3)
+    HEX_FIELDS = ["cmd", "data"]
     cmd: int
     data: int
 
 
-@dataclass
+@dataclass(repr=False)
 class BkFlashReg8WriteResp(Packet):
     CODE = 0x0D  # CMD_FlashWriteSR
     FORMAT = "BBB"
+    HEX_FIELDS = ["cmd", "data"]
     status: int
     cmd: int
     data: int
 
 
-@dataclass
+@dataclass(repr=False)
 class BkFlashReg16WriteCmnd(Packet):
     CODE = 0x0D  # CMD_FlashWriteSR
     FORMAT = "<BH"
     IS_LONG = True
     HAS_RESP_OTHER = True
     HAS_RESP_SAME = slice(1, 4)
+    HEX_FIELDS = ["cmd", "data"]
     cmd: int
     data: int
 
 
-@dataclass
+@dataclass(repr=False)
 class BkFlashReg16WriteResp(Packet):
     CODE = 0x0D  # CMD_FlashWriteSR
     FORMAT = "<BBH"
+    HEX_FIELDS = ["cmd", "data"]
     status: int
     cmd: int
     data: int
 
 
-@dataclass
+@dataclass(repr=False)
 class BkFlashReg24ReadCmnd(Packet):
     CODE = 0x0E  # CMD_FlashGetMID
     FORMAT = "<I"
     IS_LONG = True
     HAS_RESP_OTHER = True
+    HEX_FIELDS = ["cmd"]
     cmd: int
 
 
-@dataclass
+@dataclass(repr=False)
 class BkFlashReg24ReadResp(Packet):
     CODE = 0x0E  # CMD_FlashGetMID
     FORMAT = "<BxBBB"
+    HEX_FIELDS = ["data0", "data1", "data2"]
     status: int
     data0: int
     data1: int
     data2: int
 
 
-@dataclass
+@dataclass(repr=False)
 class BkFlashEraseBlockCmnd(Packet):
     CODE = 0x0F  # CMD_FlashErase
     FORMAT = "<BI"
