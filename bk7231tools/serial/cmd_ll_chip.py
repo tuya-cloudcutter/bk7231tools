@@ -61,6 +61,11 @@ class BK7231SerialCmdLLChip(BK7231SerialInterface):
         command = BkCheckCrcCmnd(start, end)
         response: BkCheckCrcResp = self.command(command)
         self.serial.timeout = timeout_current
+        if self.bootloader and self.bootloader.crc_flash_protect_lock:
+            # non-BootROM chips protect the flash after CMD_CheckCRC,
+            # but don't *mark* it as protected - hence disallowing unprotect-by-erase
+            # the only way to *mark* it as protected is CMD_LinkCheck
+            self.wait_for_link(timeout=self.cmnd_timeout)
         return response.crc32 ^ 0xFFFFFFFF
 
     def check_crc(self, start: int, data: bytes) -> None:

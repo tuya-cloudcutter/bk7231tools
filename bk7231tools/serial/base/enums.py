@@ -20,6 +20,7 @@ LONG = 1
 class BkProtocolType(Enum):
     # BK7231N BootROM protocol
     FULL = (
+        (0x00, SHORT),  # CMD_LinkCheck
         (0x01, SHORT),  # CMD_WriteReg
         (0x03, SHORT),  # CMD_ReadReg
         (0x0E, SHORT),  # CMD_Reboot
@@ -39,6 +40,7 @@ class BkProtocolType(Enum):
         (0x0F, LONG),  # CMD_FlashErase
     )
     BASIC_BEKEN = (
+        (0x00, SHORT),  # CMD_LinkCheck
         (0x0E, SHORT),  # CMD_Reboot
         (0x0F, SHORT),  # CMD_SetBaudRate
         (0x10, SHORT),  # CMD_CheckCRC
@@ -48,6 +50,7 @@ class BkProtocolType(Enum):
         (0x0F, LONG),  # CMD_FlashErase
     )
     BASIC_TUYA = (
+        (0x00, SHORT),  # CMD_LinkCheck
         (0x0E, SHORT),  # CMD_Reboot
         (0x0F, SHORT),  # CMD_SetBaudRate
         (0x10, SHORT),  # CMD_CheckCRC
@@ -71,6 +74,10 @@ class BkBootloader:
     protocol: BkProtocolType
     version: Optional[str] = None
     flash_size: int = 0
+    # for bootloaders that protect flash after every CMD_CheckCRC
+    # it can then be unprotected by CMD_FlashErase - only after a CMD_LinkCheck !!!
+    # (currently on all known non-BootROM protocols)
+    crc_flash_protect_lock: bool = False
 
 
 class BkBootloaderType(Enum):
@@ -86,12 +93,14 @@ class BkBootloaderType(Enum):
         crc=0x0FDCE109,
         chip=BkChipType.BK7231Q,
         protocol=BkProtocolType.BASIC_BEKEN,
+        crc_flash_protect_lock=True,
     )
     # bl_bk7231q_tysdk_03ED.bin
     BK7231Q_2 = BkBootloader(
         crc=0x00A5C153,
         chip=BkChipType.BK7231Q,
         protocol=BkProtocolType.BASIC_BEKEN,
+        crc_flash_protect_lock=True,
     )
     # bl_bk7231s_1.0.1_79A6.bin
     BK7231S_1_0_1 = BkBootloader(
@@ -100,6 +109,7 @@ class BkBootloaderType(Enum):
         protocol=BkProtocolType.BASIC_TUYA,
         version="1.0.1",
         flash_size=0x200_000,
+        crc_flash_protect_lock=True,
     )
     # bl_bk7231s_1.0.3_DAAE.bin
     BK7231S_1_0_3 = BkBootloader(
@@ -108,6 +118,7 @@ class BkBootloaderType(Enum):
         protocol=BkProtocolType.BASIC_TUYA,
         version="1.0.3",
         flash_size=0x200_000,
+        crc_flash_protect_lock=True,
     )
     # bl_bk7231s_1.0.5_4FF7.bin
     BK7231S_1_0_5 = BkBootloader(
@@ -116,6 +127,7 @@ class BkBootloaderType(Enum):
         protocol=BkProtocolType.BASIC_TUYA,
         version="1.0.5",
         flash_size=0x200_000,
+        crc_flash_protect_lock=True,
     )
     # bl_bk7231s_1.0.6_625D.bin
     BK7231S_1_0_6 = BkBootloader(
@@ -124,6 +136,7 @@ class BkBootloaderType(Enum):
         protocol=BkProtocolType.BASIC_TUYA,
         version="1.0.6",
         flash_size=0x200_000,
+        crc_flash_protect_lock=True,
     )
     # bl_bk7252_0.1.3_F4D3.bin
     BK7252_0_1_3 = BkBootloader(
@@ -131,12 +144,14 @@ class BkBootloaderType(Enum):
         chip=BkChipType.BK7252,
         protocol=BkProtocolType.BASIC_BEKEN,
         version="0.1.3",
+        crc_flash_protect_lock=True,
     )
     # bootloader_7252_2M_uart1_log_20190828.bin
     BK7252_SDK = BkBootloader(
         crc=0x1C5D83D9,
         chip=BkChipType.BK7252,
         protocol=BkProtocolType.BASIC_BEKEN,
+        crc_flash_protect_lock=True,
     )
 
     @staticmethod

@@ -22,10 +22,10 @@ class BK7231SerialData:
 
     flash_params: dict = None
     flash_id: bytes = None
-    flash_size: int = 0
-    flash_size_detected: bool = False
-    flash_erase_checked: bool = False
-    boot_protection_bypass: bool = True
+    flash_size: int = 0  # most appropriate known flash size
+    flash_size_detected: bool = False  # whether 'flash_size' was found by detection
+    flash_erase_checked: bool = False  # whether erase operation success was verified
+    boot_protection_bypass: bool = True  # whether BL protection bypass is enabled
     crc_speed_bps: int = 400_000
 
     # these parameters mean "retries", not "attempts"

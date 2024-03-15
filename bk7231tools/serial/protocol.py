@@ -43,15 +43,9 @@ class BK7231SerialProtocol(BK7231SerialInterface):
         packet: Union[Packet, Type[Packet], int],
         is_long: bool = False,
     ) -> None:
-        if self.protocol_type is None:
-            return
-        if isinstance(packet, int):
-            pair = (packet, is_long)
-        else:
-            pair = (packet.CODE, packet.IS_LONG)
-        if pair not in self.protocol_type.value:
+        if not self.check_protocol(packet, is_long):
             raise NotImplementedError(
-                f"Not implemented in protocol {self.protocol_type.name}: "
+                f"Command not available in protocol {self.protocol_type.name}: "
                 f"code={packet.CODE}, is_long={packet.IS_LONG}"
             )
 
