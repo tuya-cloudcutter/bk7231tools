@@ -33,7 +33,7 @@ class BK7231SerialLinking(BK7231SerialInterface):
             pass
         if not self.flash_size and self.flash_params:
             self.flash_size = self.flash_params["size"]
-        if not self.flash_size and self.bootloader_type.value.flash_size:
+        if not self.flash_size and self.bootloader_type:
             self.flash_size = self.bootloader_type.value.flash_size
         if not self.flash_size:
             self.flash_size = self.flash_detect_size()
@@ -88,11 +88,28 @@ class BK7231SerialLinking(BK7231SerialInterface):
         else:
             # if bootloader is not known, try to guess the protocol type
             self.chip_type = None
-            data = self.flash_read_bytes(start=0, length=256 + 1, crc_check=False)
-            if crc == crc32(data[0:257]):
+            self.bootloader = None
+            self.warn(
+                f"Unknown bootloader CRC - 0x{crc:08X}"
+                f" - please report this on GitHub issues!"
+            )
+            # check CRC of app data, which is readable on all protocols
+            check_offset = 0x11000
+            check_length = 256
+            crc = self.read_flash_range_crc(
+                start=check_offset,
+                end=check_offset + check_length,
+            )
+            data = self.flash_read_bytes(
+                start=check_offset,
+                length=check_length + 1,
+                crc_check=False,
+            )
+            # guess the protocol type
+            if crc == crc32(data[0 : check_length + 1]):
                 # BK72xx BootROM protocol - CRC range end-inclusive
                 self.protocol_type = BkProtocolType.FULL
-            elif crc == crc32(data[0:256]):
+            elif crc == crc32(data[0 : check_length + 0]):
                 # BK72xx Bootloader protocol - assume minimal command support
                 self.protocol_type = BkProtocolType.BASIC_BEKEN
             else:
@@ -106,7 +123,10 @@ class BK7231SerialLinking(BK7231SerialInterface):
             if any(c.value == self.bk_chip_id for c in BkChipType):
                 self.chip_type = BkChipType(self.bk_chip_id)
             else:
-                self.warn(f"Unknown SCTRL_CHIP_ID - {hex(self.bk_chip_id)}")
+                self.warn(
+                    f"Unknown SCTRL_CHIP_ID - {hex(self.bk_chip_id)}"
+                    f" - please report this on GitHub issues!"
+                )
 
         if self.check_protocol(BkBootVersionCmnd):
             # read BK7231T boot version

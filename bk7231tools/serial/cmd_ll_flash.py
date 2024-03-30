@@ -75,7 +75,7 @@ class BK7231SerialCmdLLFlash(BK7231SerialInterface):
 
     def flash_detect_size(self) -> int:
         self.info("Flash size - detecting...")
-        sizes = [0.5, 1, 2, 4, 8, 16]  # MiB
+        sizes = [2, 4, 8, 16]  # MiB
         # disable bootloader protection bypass
         self.boot_protection_bypass = False
         safe_offset = 0x11000
