@@ -18,9 +18,7 @@ class BK7231SerialCmdLLChip(BK7231SerialInterface):
     def fix_addr(self, addr: int) -> int:
         if self.flash_size == 0 or not self.boot_protection_bypass:
             return addr
-        addr &= self.flash_size - 1
-        addr |= self.flash_size
-        return addr
+        return addr + self.flash_size
 
     def reboot_chip(self) -> None:
         command = BkRebootCmnd(0xA5)
