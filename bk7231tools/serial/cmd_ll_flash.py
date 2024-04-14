@@ -220,7 +220,7 @@ class BK7231SerialCmdLLFlash(BK7231SerialInterface):
                     if size != EraseSize.SECTOR_4K:
                         self.warn("Cannot verify erasing in 64K block mode")
                         do_erase()
-                    elif self.bootloader and self.bootloader.crc_flash_protect_lock:
+                    elif self.has_crc_flash_protect_lock:
                         # non-BootROM chips don't allow unprotect-by-erase
                         # after CMD_CheckCRC, so erase verification makes everything
                         # much more complicated... let's just skip that

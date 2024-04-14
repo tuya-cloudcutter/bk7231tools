@@ -74,6 +74,10 @@ class BK7231SerialInterface(BK7231SerialData):
 
     def check_crc(self, start: int, data: bytes) -> None: ...
 
+    @property
+    def has_crc_flash_protect_lock(self) -> bool:
+        raise NotImplementedError()
+
     # cmd_ll_flash.py
     def flash_read_reg8(self, cmd: int) -> int: ...
 
