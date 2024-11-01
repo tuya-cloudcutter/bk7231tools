@@ -24,6 +24,7 @@ class BK7231SerialCmdHLFlash(BK7231SerialInterface):
         b"\x51\x40\x14": 1,
         b"\x5E\x40\x14": 1,
         b"\x85\x42\x15": 1,
+        b"\x85\x20\x15": 2,
         b"\x85\x60\x13": 2,
         b"\x85\x60\x14": 2,
         b"\x85\x60\x16": 2,
@@ -55,7 +56,7 @@ class BK7231SerialCmdHLFlash(BK7231SerialInterface):
     #
     # |  7  |  6  |  5  |  4  |  3  |  2  |  1  |  0  |
     # |SRP0 | BP4 | BP3 | BP2 | BP1 | BP0 | WEL | WIP |
-    def flash_unprotect(self, mask: int = 0b01111100) -> None:
+    def flash_unprotect(self, mask: int = 0b0100000001111100) -> None:
         flash_id: bytes = self.flash_read_id()["id"]
         if flash_id not in self.FLASH_SR_SIZE:
             raise ValueError(f"Flash ID not known: {flash_id.hex()}")
