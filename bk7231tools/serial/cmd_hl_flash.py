@@ -138,14 +138,15 @@ class BK7231SerialCmdHLFlash(BK7231SerialInterface):
             # write data in 256-byte chunks
             sector_end = (addr & ~0xFFF) + 4096
             while addr & 0xFFF:
-                block = io.read(min(256, sector_end - addr))
+                padding_len = addr & 0xFF
+                block = io.read(min(256 - padding_len, sector_end - addr))
                 block_size = len(block)
                 if not block_size:
                     # writing finished
                     return
                 self.flash_write_bytes(
-                    addr,
-                    block,
+                    addr - padding_len,
+                    padding_len * b"\xFF" + block,
                     crc_check=crc_check,
                     dry_run=dry_run,
                 )

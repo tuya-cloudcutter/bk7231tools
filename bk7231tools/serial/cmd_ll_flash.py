@@ -136,6 +136,17 @@ class BK7231SerialCmdLLFlash(BK7231SerialInterface):
         if response.written != len(data):
             raise ValueError(f"Writing failed; wrote only {response.written} bytes")
         if crc_check:
+            if start & 0xFF:
+                self.warn(
+                    f"Start address (0x{start:06X} is not 256 B-aligned, "
+                    f"can't check CRC"
+                )
+                return
+            if len(data) < 256:
+                # start address aligned, but length is less than 256
+                # add necessary padding
+                # (this is an assumption, that the block was erased prior to writing)
+                data += b"\xFF" * (256 - len(data))
             self.check_crc(start, data)
 
     def flash_write_4k(
@@ -145,6 +156,8 @@ class BK7231SerialCmdLLFlash(BK7231SerialInterface):
         crc_check: bool = True,
         dry_run: bool = False,
     ) -> None:
+        if start & 0xFFF:
+            raise ValueError(f"Start address (0x{start:06X}) is not 4k-aligned")
         if len(data) > 4096:
             raise ValueError(f"Data too long ({len(data)} > 4096)")
         if len(data) < 4096:

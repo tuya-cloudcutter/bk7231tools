@@ -123,7 +123,7 @@ class BK7231SerialProtocol(BK7231SerialInterface):
                 offset = self.fix_addr(offset)
                 setattr(packet, field, offset)
 
-        self.debug("<- TX:", shorten(str(packet), 64))
+        self.debug("<- TX:", shorten(str(packet), 100))
 
         self.write(self.encode(packet))
         if after_send:
@@ -187,7 +187,7 @@ class BK7231SerialProtocol(BK7231SerialInterface):
                 else:
                     resp = response.hex()
                 raise ValueError(f"Couldn't deserialize response: {resp}")
-            self.debug(f"-> RX ({size}):", shorten(str(response), 64))
+            self.debug(f"-> RX ({size}):", shorten(str(response), 100))
             # check response status code, if available
             if response.STATUS_FIELDS:
                 for field in response.STATUS_FIELDS:
