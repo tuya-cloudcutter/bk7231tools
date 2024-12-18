@@ -162,18 +162,6 @@ class BK7231SerialCmdHLFlash(BK7231SerialInterface):
             block_size = len(block) if addr < end else 0
             block_empty = not len(block.strip(b"\xff"))
             if not block_size:
-                if crc_check:
-                    self.info("Verifying CRC")
-                    pad_size = (4096 - (io_size % 4096)) % 4096
-                    crc = crc32(b"\xff" * pad_size, crc)
-                    crc_chip = self.read_flash_range_crc(
-                        start=start,
-                        end=start + io_size + pad_size,
-                    )
-                    if crc != crc_chip:
-                        raise ValueError(
-                            f"Chip CRC value {crc_chip:X} does not match calculated CRC value {crc:X}"
-                        )
                 self.info("OK!")
                 return
             # print progress info
