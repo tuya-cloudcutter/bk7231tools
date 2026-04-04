@@ -146,7 +146,7 @@ class BK7231SerialCmdLLFlash(BK7231SerialInterface):
                 # start address aligned, but length is less than 256
                 # add necessary padding
                 # (this is an assumption, that the block was erased prior to writing)
-                data += b"\xFF" * (256 - len(data))
+                data += b"\xff" * (256 - len(data))
             self.check_crc(start, data)
 
     def flash_write_4k(

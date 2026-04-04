@@ -214,7 +214,7 @@ class KVStorage(DataStruct):
     @staticmethod
     def find_storage(data: bytes) -> Optional[Tuple[int, bytes]]:
         aes = AES.new(key=KEY_MASTER, mode=AES.MODE_ECB)
-        magic = aes.encrypt(b"\xFF" * 16)
+        magic = aes.encrypt(b"\xff" * 16)
         try:
             pos = data.index(magic)
             pos -= 32  # rewind to block start

@@ -87,7 +87,7 @@ class BekenCodeCipher(object):
         data_rem = len(data) % self.BLOCK_LENGTH_BYTES
         result = data
         if data_rem != 0:
-            result += b"\xFF" * (self.BLOCK_LENGTH_BYTES - data_rem)
+            result += b"\xff" * (self.BLOCK_LENGTH_BYTES - data_rem)
         return result
 
     def _encrypt_block(self, block: bytes, block_start_offset: int):

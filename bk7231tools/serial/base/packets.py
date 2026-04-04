@@ -5,11 +5,11 @@ from enum import IntEnum
 from struct import calcsize, pack, unpack
 from typing import Dict, List, Type
 
-PACKET_CMND_PREAMBLE = b"\x01\xE0\xFC"
-PACKET_CMND_LONG = b"\xFF\xF4"
-PACKET_RESP_PREAMBLE = b"\x04\x0E"
-PACKET_RESP_DATA = b"\x01\xE0\xFC"
-PACKET_RESP_LONG = b"\xF4"
+PACKET_CMND_PREAMBLE = b"\x01\xe0\xfc"
+PACKET_CMND_LONG = b"\xff\xf4"
+PACKET_RESP_PREAMBLE = b"\x04\x0e"
+PACKET_RESP_DATA = b"\x01\xe0\xfc"
+PACKET_RESP_LONG = b"\xf4"
 
 
 class EraseSize(IntEnum):

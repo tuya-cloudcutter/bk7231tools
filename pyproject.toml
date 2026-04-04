@@ -15,7 +15,7 @@ py-datastruct = "^1.0.0"
 cli = ["pycryptodome"]
 
 [tool.poetry.dev-dependencies]
-black = "^22.6.0"
+black = { version = "^26.1.0", markers = "python_version >= '3.10'" }
 isort = "^5.10.1"
 autoflake = "^1.4"
 

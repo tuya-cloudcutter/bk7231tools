@@ -156,7 +156,7 @@ class BK7231SerialProtocol(BK7231SerialInterface):
                 if PACKET_RESP_LONG != self.read(until=PACKET_RESP_LONG):
                     # Invalid packet, so continue reading until a new valid packet is found
                     continue
-                (size, code) = unpack("<HB", self.read(count=3))
+                size, code = unpack("<HB", self.read(count=3))
                 size -= 1  # code
             else:
                 code = self.read()

@@ -156,7 +156,7 @@ def __scan_pattern_find_payload(
             datablock = data[i - 16 : i]
             # Scan for a block of 16 FF bytes, indicating padding at the end of a partition.
             # This is to ignore RBL headers and other metadata while scanning.
-            if datablock == (b"\xFF" * 16):
+            if datablock == (b"\xff" * 16):
                 break
             i -= 16
         if i <= 0:
@@ -166,7 +166,7 @@ def __scan_pattern_find_payload(
         # and the padding block right before it
         while i > 0:
             datablock = data[i - 16 : i]
-            if datablock != (b"\xFF" * 16) and data[i - 32 : i - 16] == (b"\xFF" * 16):
+            if datablock != (b"\xff" * 16) and data[i - 32 : i - 16] == (b"\xff" * 16):
                 # This is exactly after the last 0xFF padding block including its CRC-16 checksum
                 i = i - 16 + 2
                 break

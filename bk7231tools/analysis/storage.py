@@ -163,7 +163,7 @@ class TuyaStorage:
         i = 0
         while True:
             block = self.block(i + 1)
-            if not block.strip(b"\xFF"):
+            if not block.strip(b"\xff"):
                 # skip empty blocks
                 break
             block = self.block(i + 1, aes.decrypt(block))
