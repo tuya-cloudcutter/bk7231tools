@@ -87,6 +87,13 @@ class BkBootloaderType(Enum):
         protocol=BkProtocolType.FULL,
         version="1.0.1",
     )
+    # bl_t1_2.0.0_DA47.bin
+    BK7238_T1_2_0_0 = BkBootloader(
+        crc=0xF42F8C32,  # 00000000000000000000000000000000
+        chip=BkChipType.BK7238,
+        protocol=BkProtocolType.FULL,
+        version="2.0.0 (T1)",
+    )
     # bl_bk7231q_6AFA.bin
     BK7231Q_1 = BkBootloader(
         crc=0xF0231EF6,  # 00000000000000000000000000000000
@@ -160,6 +167,13 @@ class BkBootloaderType(Enum):
         chip=BkChipType.BK7252,
         protocol=BkProtocolType.BASIC_BEKEN,
         crc_flash_protect_lock=True,
+    )
+    # bootloader_bk7238_uart1_v1.0.14.bin
+    BK7238_1_0_14 = BkBootloader(
+        crc=0x6BEB0924,  # 00000000000000000000000000000000
+        chip=BkChipType.BK7238,
+        protocol=BkProtocolType.FULL,
+        version="1.0.14",
     )
 
     @staticmethod
