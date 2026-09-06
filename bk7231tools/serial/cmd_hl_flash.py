@@ -62,6 +62,11 @@ class BK7231SerialCmdHLFlash(BK7231SerialInterface):
             raise ValueError(f"Flash ID not known: {flash_id.hex()}")
         sr_size = self.FLASH_SR_SIZE[flash_id]
         sr = self.flash_read_sr(size=sr_size)
+        if not (sr & mask):
+            # Already unprotected: the value about to be written is the value
+            # just read. Skip it, both to save a non-volatile write cycle and
+            # because a no-op write is not harmless on every bootloader.
+            return
         sr &= ~mask
         self.flash_write_sr(sr, size=sr_size, mask=mask)
 
