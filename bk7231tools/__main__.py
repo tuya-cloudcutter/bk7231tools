@@ -347,7 +347,9 @@ def dissect_dump_file(args):
                     output_directory, f"{dumpfile_name}_storage-orphaned.json"
                 )
                 with open(out_name, "w") as f:
-                    print(f"\t\textracted {len(orphaned)} orphaned values to {out_name}")
+                    print(
+                        f"\t\textracted {len(orphaned)} orphaned values to {out_name}"
+                    )
                     json.dump(orphaned, f, indent="\t")
 
             if not args.storage:

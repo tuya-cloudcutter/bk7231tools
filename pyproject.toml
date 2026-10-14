@@ -18,9 +18,9 @@ py-datastruct = [
 cli = ["pycryptodome"]
 
 [tool.poetry.dev-dependencies]
-black = { version = "^26.1.0", markers = "python_version >= '3.10'" }
-isort = "^5.10.1"
-autoflake = "^1.4"
+black = {version = "^26.10.1", markers = "python_version >= '3.10'"}
+isort = {version = "^9.0.2", markers = "python_version >= '3.10'"}
+autoflake = {version = "^2.4.0", markers = "python_version >= '3.10'"}
 
 [tool.poetry.scripts]
 bk7231tools = "bk7231tools:cli"

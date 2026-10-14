@@ -446,7 +446,10 @@ class KVStorage(DataStruct):
         referenced by any key. Values identical to the existing keys, as well as
         duplicates, are omitted.
         """
-        known = [json.dumps(v, sort_keys=True) for v in self.read_all_values_parsed().values()]
+        known = [
+            json.dumps(v, sort_keys=True)
+            for v in self.read_all_values_parsed().values()
+        ]
         seen = set(known)
         result = {}
         for block_id, page_id, data in self._iter_orphaned_runs():
