@@ -12,6 +12,7 @@ class BK7231SerialData:
     baudrate: int
     link_timeout: float
     cmnd_timeout: float
+    link_read_timeout: float  # per-attempt read timeout while waiting for link
 
     protocol_type: BkProtocolType = None
     chip_type: Optional[BkChipType] = None

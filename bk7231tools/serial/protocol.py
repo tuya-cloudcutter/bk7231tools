@@ -5,7 +5,7 @@ import sys
 from struct import pack, unpack
 from textwrap import shorten
 from time import sleep
-from typing import Callable, Type, Union
+from typing import Callable, List, Optional, Tuple, Type, Union
 
 from .base import BK7231SerialInterface, Packet
 from .base.packets import (
@@ -22,14 +22,32 @@ __compat__ = CHIP_BY_CRC
 
 
 class BK7231SerialProtocol(BK7231SerialInterface):
+    # reset sequence timings (seconds)
+    HW_RESET_DTR_HOLD = 0.1
+    HW_RESET_RTS_HOLD = 0.1
+
+    def hw_reset_steps(self) -> List[Tuple[float, Optional[bool], Optional[bool]]]:
+        # (time since sequence start, new RTS state, new DTR state)
+        # None means 'leave unchanged'
+        return [
+            (0.0, True, True),
+            (self.HW_RESET_DTR_HOLD, None, False),
+            (self.HW_RESET_DTR_HOLD + self.HW_RESET_RTS_HOLD, False, None),
+        ]
+
+    def hw_reset_apply(self, rts: Optional[bool], dtr: Optional[bool]) -> None:
+        if rts is not None:
+            self.serial.rts = rts
+        if dtr is not None:
+            self.serial.dtr = dtr
+
     def hw_reset(self) -> None:
-        # reset the chip using RTS and DTR lines
-        self.serial.rts = True
-        self.serial.dtr = True
-        sleep(0.1)
-        self.serial.dtr = False
-        sleep(0.1)
-        self.serial.rts = False
+        # reset the chip using RTS and DTR lines (blocking)
+        prev = 0.0
+        for at, rts, dtr in self.hw_reset_steps():
+            sleep(at - prev)
+            prev = at
+            self.hw_reset_apply(rts, dtr)
 
     def drain(self) -> None:
         tm_prev = self.serial.timeout

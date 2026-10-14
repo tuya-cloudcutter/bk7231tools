@@ -31,6 +31,12 @@ def __add_serial_args(parser: argparse.ArgumentParser):
         help="Timeout for operations in seconds (default: 10.0)",
     )
     parser.add_argument(
+        "--link-read-timeout",
+        type=float,
+        default=5.0,
+        help="Read timeout of each link check attempt in milliseconds (default: 5.0)",
+    )
+    parser.add_argument(
         "-D",
         "--debug",
         action="store_true",
@@ -391,13 +397,17 @@ def dissect_dump_file(args):
             json.dump(upk, f, indent="\t")
 
 
-def connect_device(device, baudrate, timeout, debug):
-    s = BK7231Serial(device, baudrate, link_timeout=timeout)
+def connect_device(device, baudrate, timeout, debug, link_read_timeout_ms=5.0):
+    s = BK7231Serial(
+        device,
+        baudrate,
+        link_timeout=timeout,
+        link_read_timeout=float(link_read_timeout_ms) / 1000,
+    )
     if debug:
         s.debug = print
     s.info = print
-    s.hw_reset()
-    s.connect()
+    s.connect(reset=True)
     items = [
         f"Chip info: {s.chip_info}",
         f"Flash ID: {s.flash_id.hex(' ', -1) if s.flash_id else None}",
@@ -640,7 +650,13 @@ def cli():
     try:
         if args.device_required:
             with closing(
-                connect_device(args.device, args.baudrate, args.timeout, args.debug)
+                connect_device(
+                    args.device,
+                    args.baudrate,
+                    args.timeout,
+                    args.debug,
+                    args.link_read_timeout,
+                )
             ) as device:
                 args.handler(device, args)
         else:

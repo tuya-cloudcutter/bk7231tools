@@ -25,6 +25,7 @@ class BK7231Serial(
         link_timeout: float = 10.0,
         cmnd_timeout: float = 1.0,
         link_baudrate: int = 115200,
+        link_read_timeout: float = 0.005,
         **kwargs,
     ) -> None:
         self.serial = Serial(
@@ -38,6 +39,7 @@ class BK7231Serial(
         self.baudrate = baudrate
         self.link_timeout = link_timeout
         self.cmnd_timeout = cmnd_timeout
+        self.link_read_timeout = link_read_timeout
         if kwargs.get("debug_hl", False):
             self.debug = print
         if kwargs.get("debug_ll", False):
