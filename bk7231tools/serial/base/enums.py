@@ -87,6 +87,13 @@ class BkBootloaderType(Enum):
         protocol=BkProtocolType.FULL,
         version="1.0.1",
     )
+    # bootloader from Enbrighten_Matter-Motion-Dimmer-v1.1.6.bin
+    BK7231N_3_0_1 = BkBootloader(
+        crc=0x9B49BF9C,  # 510fb093a3cbeadc5993a17ec7adeb03
+        chip=BkChipType.BK7231N,
+        protocol=BkProtocolType.FULL,
+        version="3.0.1",
+    )
     # bl_t1_2.0.0_DA47.bin
     BK7238_T1_2_0_0 = BkBootloader(
         crc=0xF42F8C32,  # 00000000000000000000000000000000
