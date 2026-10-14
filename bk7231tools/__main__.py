@@ -268,13 +268,17 @@ def dissect_dump_file(args):
     missing_rbl_containers = {part.name for part in layout.partitions} - container_names
     for missing in missing_rbl_containers:
         print(f"Missing {missing} RBL container. Using a scan pattern instead")
-        _, code = __scan_pattern_find_payload(
-            dumpfile,
-            partition_name=missing,
-            layout=layout,
-            output_directory=output_directory,
-            extract=args.extract,
-        )
+        try:
+            _, code = __scan_pattern_find_payload(
+                dumpfile,
+                partition_name=missing,
+                layout=layout,
+                output_directory=output_directory,
+                extract=args.extract,
+            )
+        except ValueError as e:
+            print(f"\t- {e}")
+            continue
         if missing == "app" and not app_code:
             app_code = code
 
