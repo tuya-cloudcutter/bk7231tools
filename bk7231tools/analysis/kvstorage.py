@@ -6,7 +6,8 @@ from dataclasses import dataclass
 from io import SEEK_END, SEEK_SET
 from json import JSONDecodeError
 from logging import warning
-from typing import Dict, List, Optional, Tuple, Union
+from struct import unpack
+from typing import Dict, Iterator, List, Optional, Tuple, Union
 
 from Crypto.Cipher import AES
 from datastruct import Context, DataStruct, datastruct
@@ -220,7 +221,23 @@ class KVStorage(DataStruct):
             pos -= 32  # rewind to block start
         except ValueError:
             return None
-        return pos, data[pos : pos + 0x8000]
+        # the storage may be larger than the default 32 KiB; extend it
+        # for as long as the following blocks are valid data blocks
+        end = pos + 0x8000
+        key_block = aes.decrypt(data[pos : pos + 32])
+        if len(key_block) == 32:
+            data_aes = make_data_aes(key_block[8:24])
+            block_pos = pos + 0x1000
+            while block_pos + 0x1000 <= len(data):
+                block = data_aes.decrypt(data[block_pos : block_pos + 0x1000])
+                magic, checksum = unpack("<II", block[0:8])
+                if magic not in (MAGIC_DATA_1, MAGIC_DATA_2):
+                    break
+                if checksum != sum(block[8:]) & 0xFFFFFFFF:
+                    break
+                block_pos += 0x1000
+            end = max(end, block_pos)
+        return pos, data[pos:end]
 
     @staticmethod
     def find_user_param_key(data: bytes) -> Optional[Tuple[int, str]]:
@@ -353,6 +370,97 @@ class KVStorage(DataStruct):
         result = {}
         for name, index in self.indexes.items():
             result[name] = self.read_value_parsed(index)
+        return result
+
+    def _iter_orphaned_runs(self) -> Iterator[Tuple[int, int, bytes]]:
+        """
+        Yield (block ID, first page ID, data) for every run of consecutive data
+        pages that are not referenced by any index (e.g. stale or deleted values,
+        swap blocks).
+        """
+        used = set()
+        for block_pages in self.blocks.values():
+            for page in block_pages.values():
+                if isinstance(page, DataBlock.IndexPage):
+                    used.add(id(page))
+        for index in self.indexes.values():
+            for part in index.parts_data:
+                for page_id in range(part.page_id_start, part.page_id_end + 1):
+                    page = self.blocks.get(part.block_id, {}).get(page_id, None)
+                    if page is not None:
+                        used.add(id(page))
+
+        for block in self.data_blocks:
+            run_start = 0
+            run = b""
+            for i, page in enumerate(block.pages + [None]):
+                if isinstance(page, DataBlock.DataPage) and id(page) not in used:
+                    if not run:
+                        run_start = i + 1
+                    run += page.data
+                    continue
+                if run:
+                    yield block.block_id, run_start, run
+                run = b""
+
+    @staticmethod
+    def _parse_orphaned_run(data: bytes) -> List[Union[str, dict, list]]:
+        """Find all readable values (JSON or plain text) in a run of raw data."""
+        text = data.decode("latin-1")
+        decoder = json.JSONDecoder()
+        results = []
+        leftovers = []
+        pos = 0
+        last = 0
+        while True:
+            pos = text.find("{", pos)
+            if pos == -1:
+                break
+            try:
+                value, end = decoder.raw_decode(text, pos)
+            except JSONDecodeError:
+                pos += 1
+                continue
+            leftovers.append(text[last:pos])
+            results.append(value)
+            pos = last = end
+        leftovers.append(text[last:])
+
+        for chunk in leftovers:
+            for part in re.split(r"[\x00\xff]+", chunk):
+                if len(part) < 8 or not re.fullmatch(r"[A-Za-z0-9+/=._:\- ]+", part):
+                    # not a plain value - maybe a JSON string
+                    try:
+                        value = json.loads(part)
+                    except JSONDecodeError:
+                        continue
+                    if not isinstance(value, str) or len(value) < 8:
+                        continue
+                    part = value
+                results.append(part)
+        return results
+
+    def read_orphaned_values_parsed(self) -> Dict[str, Union[str, dict, list]]:
+        """
+        Read all readable data that is present in the storage, but is not
+        referenced by any key. Values identical to the existing keys, as well as
+        duplicates, are omitted.
+        """
+        known = [json.dumps(v, sort_keys=True) for v in self.read_all_values_parsed().values()]
+        seen = set(known)
+        result = {}
+        for block_id, page_id, data in self._iter_orphaned_runs():
+            for value in self._parse_orphaned_run(data):
+                serialized = json.dumps(value, sort_keys=True)
+                if serialized in seen:
+                    continue
+                seen.add(serialized)
+                name = f"block{block_id}_page{page_id}"
+                suffix = 1
+                while name in result:
+                    suffix += 1
+                    name = f"block{block_id}_page{page_id}_{suffix}"
+                result[name] = value
         return result
 
     @property

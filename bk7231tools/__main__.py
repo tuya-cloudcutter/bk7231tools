@@ -329,6 +329,21 @@ def dissect_dump_file(args):
             with open(out_name, "w") as f:
                 print(f"\t\textracted all keys to {out_name}")
                 json.dump(kvs_data, f, indent="\t")
+
+            try:
+                orphaned = kvs.read_orphaned_values_parsed()
+            except Exception:
+                print("!!! Couldn't read orphaned KVS values")
+                traceback.print_exc()
+                orphaned = {}
+            if orphaned:
+                out_name = os.path.join(
+                    output_directory, f"{dumpfile_name}_storage-orphaned.json"
+                )
+                with open(out_name, "w") as f:
+                    print(f"\t\textracted {len(orphaned)} orphaned values to {out_name}")
+                    json.dump(orphaned, f, indent="\t")
+
             if not args.storage:
                 break
 
