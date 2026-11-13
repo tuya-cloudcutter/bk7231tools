@@ -13,9 +13,12 @@ class BK7231SerialData:
     link_timeout: float
     cmnd_timeout: float
     link_read_timeout: float  # per-attempt read timeout while waiting for link
+    reset_mode: str
+    reset_hold: float
 
     protocol_type: BkProtocolType = None
     chip_type: Optional[BkChipType] = None
+    chip_type_forced: Optional[BkChipType] = None
     bootloader_type: Optional[BkBootloaderType] = None
     bootloader: Optional[BkBootloader] = None
     bk_chip_id: Optional[int] = None

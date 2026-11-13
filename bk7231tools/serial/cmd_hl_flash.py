@@ -2,9 +2,9 @@
 
 from binascii import crc32
 from io import BytesIO
-from typing import IO, Generator
+from typing import IO, Generator, Tuple
 
-from .base import BK7231SerialInterface, BkProtocolType, EraseSize
+from .base import BK7231SerialInterface, BkChipType, BkProtocolType, EraseSize
 
 
 class BK7231SerialCmdHLFlash(BK7231SerialInterface):
@@ -56,14 +56,20 @@ class BK7231SerialCmdHLFlash(BK7231SerialInterface):
     #
     # |  7  |  6  |  5  |  4  |  3  |  2  |  1  |  0  |
     # |SRP0 | BP4 | BP3 | BP2 | BP1 | BP0 | WEL | WIP |
-    def flash_unprotect(self, mask: int = 0b0100000001111100) -> None:
+    def flash_unprotect(self, mask: int = 0b0100000001111100) -> Tuple[int, int, int]:
         flash_id: bytes = self.flash_read_id()["id"]
         if flash_id not in self.FLASH_SR_SIZE:
             raise ValueError(f"Flash ID not known: {flash_id.hex()}")
         sr_size = self.FLASH_SR_SIZE[flash_id]
         sr = self.flash_read_sr(size=sr_size)
-        sr &= ~mask
-        self.flash_write_sr(sr, size=sr_size, mask=mask)
+        self.flash_write_sr(sr & ~mask, size=sr_size, mask=mask)
+        return sr_size, sr, mask
+
+    def flash_restore_protection(self, state: Tuple[int, int, int]) -> None:
+        sr_size, sr_original, mask = state
+        sr_current = self.flash_read_sr(size=sr_size)
+        sr_restored = (sr_current & ~mask) | (sr_original & mask)
+        self.flash_write_sr(sr_restored, size=sr_size, mask=mask)
 
     def flash_read(
         self,
@@ -112,17 +118,42 @@ class BK7231SerialCmdHLFlash(BK7231SerialInterface):
         really_erase: bool = False,
         dry_run: bool = False,
     ) -> Generator[int, None, None]:
+        protection_state = None
+        if self.protocol_type == BkProtocolType.FULL and not dry_run:
+            self.info("Trying to unprotect flash memory...")
+            state = self.flash_unprotect()
+            if self.chip_type == BkChipType.BK7258:
+                protection_state = state
+
+        try:
+            yield from self._program_flash_unprotected(
+                io=io,
+                io_size=io_size,
+                start=start,
+                crc_check=crc_check,
+                really_erase=really_erase,
+                dry_run=dry_run,
+            )
+        finally:
+            if protection_state is not None:
+                self.info("Restoring flash protection...")
+                self.flash_restore_protection(protection_state)
+
+    def _program_flash_unprotected(
+        self,
+        io: IO[bytes],
+        io_size: int,
+        start: int,
+        crc_check: bool = False,
+        really_erase: bool = False,
+        dry_run: bool = False,
+    ) -> Generator[int, None, None]:
         end = start + io_size
         addr = start
         if start & 0xFFF and not really_erase:
             raise ValueError(f"Start address not on 4K boundary; sector erase needed")
         if self.flash_size and end > self.flash_size:
             raise ValueError(f"Input data is larger than flash memory size")
-
-        # unprotect flash memory for BK7231N
-        if self.protocol_type == BkProtocolType.FULL:
-            self.info("Trying to unprotect flash memory...")
-            self.flash_unprotect()
 
         # start is NOT on sector boundary
         if addr & 0xFFF:

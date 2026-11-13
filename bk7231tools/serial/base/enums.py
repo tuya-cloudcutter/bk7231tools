@@ -12,6 +12,7 @@ class BkChipType(IntEnum):
     BK7231N = 0x7231C
     BK7238 = 0x7238
     BK7252 = 0x7252
+    BK7258 = 0x7258
 
 
 SHORT = 0
