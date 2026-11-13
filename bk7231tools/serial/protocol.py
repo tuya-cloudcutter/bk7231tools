@@ -22,17 +22,20 @@ __compat__ = CHIP_BY_CRC
 
 
 class BK7231SerialProtocol(BK7231SerialInterface):
-    # reset sequence timings (seconds)
-    HW_RESET_DTR_HOLD = 0.1
-    HW_RESET_RTS_HOLD = 0.1
-
     def hw_reset_steps(self) -> List[Tuple[float, Optional[bool], Optional[bool]]]:
         # (time since sequence start, new RTS state, new DTR state)
         # None means 'leave unchanged'
+        if self.reset_mode == "none":
+            return []
+        if self.reset_mode == "rts":
+            return [
+                (0.0, True, None),
+                (self.reset_hold, False, None),
+            ]
         return [
             (0.0, True, True),
-            (self.HW_RESET_DTR_HOLD, None, False),
-            (self.HW_RESET_DTR_HOLD + self.HW_RESET_RTS_HOLD, False, None),
+            (self.reset_hold, None, False),
+            (self.reset_hold * 2, False, None),
         ]
 
     def hw_reset_apply(self, rts: Optional[bool], dtr: Optional[bool]) -> None:
@@ -48,6 +51,12 @@ class BK7231SerialProtocol(BK7231SerialInterface):
             sleep(at - prev)
             prev = at
             self.hw_reset_apply(rts, dtr)
+
+    def hw_reset_release(self) -> None:
+        if self.reset_mode == "rts":
+            self.hw_reset_apply(False, None)
+        elif self.reset_mode == "dtr-rts":
+            self.hw_reset_apply(False, False)
 
     def drain(self) -> None:
         tm_prev = self.serial.timeout

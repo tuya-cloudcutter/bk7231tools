@@ -10,9 +10,10 @@ from contextlib import closing
 from pathlib import Path
 from typing import List
 
-from bk7231tools.analysis import flash, rbl, utils
+from bk7231tools.analysis import beken, flash, rbl, utils
 from bk7231tools.crypto.code import BekenCodeCipher
 from bk7231tools.serial import BK7231Serial
+from bk7231tools.serial.base import BkChipType
 
 
 def __add_serial_args(parser: argparse.ArgumentParser):
@@ -21,8 +22,8 @@ def __add_serial_args(parser: argparse.ArgumentParser):
         "-b",
         "--baudrate",
         type=int,
-        default=115200,
-        help="Serial device baudrate (default: 115200)",
+        default=None,
+        help="Serial device baudrate (default: 460800 for BK7258, otherwise 115200)",
     )
     parser.add_argument(
         "--timeout",
@@ -42,6 +43,23 @@ def __add_serial_args(parser: argparse.ArgumentParser):
         action="store_true",
         default=False,
         help="Visualize serial protocol messages (default: False)",
+    )
+    parser.add_argument(
+        "--chip",
+        choices=("bk7258",),
+        help="Use a chip-specific download ROM profile",
+    )
+    parser.add_argument(
+        "--reset-mode",
+        choices=("dtr-rts", "rts", "none"),
+        default=None,
+        help="Hardware reset line sequence (default: rts for BK7258, otherwise dtr-rts)",
+    )
+    parser.add_argument(
+        "--reset-hold",
+        type=float,
+        default=0.1,
+        help="Time to assert each reset line, in seconds (default: 0.1)",
     )
     return parser
 
@@ -399,17 +417,34 @@ def dissect_dump_file(args):
             json.dump(upk, f, indent="\t")
 
 
-def connect_device(device, baudrate, timeout, debug, link_read_timeout_ms=5.0):
+def connect_device(
+    device,
+    baudrate,
+    timeout,
+    debug,
+    link_read_timeout_ms=5.0,
+    chip=None,
+    reset_mode=None,
+    reset_hold=0.1,
+):
+    chip_type = BkChipType[chip.upper()] if chip else None
+    if baudrate is None:
+        baudrate = 460800 if chip_type == BkChipType.BK7258 else 115200
+    if reset_mode is None:
+        reset_mode = "rts" if chip_type == BkChipType.BK7258 else "dtr-rts"
     s = BK7231Serial(
         device,
         baudrate,
         link_timeout=timeout,
         link_read_timeout=float(link_read_timeout_ms) / 1000,
+        chip_type=chip_type,
+        reset_mode=reset_mode,
+        reset_hold=reset_hold,
     )
     if debug:
         s.debug = print
     s.info = print
-    s.connect(reset=True)
+    s.connect(reset=reset_mode != "none")
     items = [
         f"Chip info: {s.chip_info}",
         f"Flash ID: {s.flash_id.hex(' ', -1) if s.flash_id else None}",
@@ -443,13 +478,32 @@ def read_flash(device: BK7231Serial, args):
 
     args.start = args.start or 0x000000
 
-    if args.length and args.start + args.length > 0x200000:
+    if args.start < 0:
+        print("Physical start offset cannot be negative")
+        exit(1)
+    read_limit = (
+        device.flash_size
+        if device.chip_type == BkChipType.BK7258
+        else min(device.flash_size, 0x200000)
+    )
+    if args.start > read_limit:
         print(
-            f"Reading 0x{args.length:X} bytes at 0x{args.start:X} would go past the flash memory end"
+            f"Physical start offset 0x{args.start:X} is past "
+            f"the 0x{read_limit:X}-byte read limit"
+        )
+        exit(1)
+    if args.length is not None and args.length < 0:
+        print("Length cannot be negative")
+        exit(1)
+
+    if args.length and args.start + args.length > read_limit:
+        print(
+            f"Reading 0x{args.length:X} bytes at 0x{args.start:X} would go past "
+            f"the 0x{read_limit:X}-byte read limit"
         )
         exit(1)
 
-    args.length = args.length or (0x200000 - args.start)
+    args.length = args.length or (read_limit - args.start)
 
     print(f"Reading {args.length} bytes from 0x{args.start:X}")
 
@@ -461,57 +515,98 @@ def read_flash(device: BK7231Serial, args):
 
 
 def write_flash(device: BK7231Serial, args):
-    args.start = args.start or 0x000000
     args.skip = args.skip or 0x000000
 
-    if args.start < 0x11000 and not args.bootloader:
+    try:
+        file_size = os.stat(args.file).st_size
+    except FileNotFoundError:
+        print("Input file doesn't exist")
+        exit(1)
+    if args.skip < 0 or args.skip > file_size:
+        print("Skip must be within the input file")
+        exit(1)
+    size = file_size - args.skip
+
+    if args.length:
+        if args.length < 0:
+            print("Length cannot be negative")
+            exit(1)
+        if args.length > size:
+            print("Length is bigger than entire file size")
+            exit(1)
+        size = args.length
+
+    if args.logical_start is not None:
+        if device.chip_type != BkChipType.BK7258:
+            print("Logical flash writing is currently supported only for BK7258")
+            exit(1)
+        try:
+            start = beken.logical_to_physical(args.logical_start)
+        except ValueError as e:
+            print(e)
+            exit(1)
+        if start & 0xFFF:
+            print(
+                f"Logical start 0x{args.logical_start:X} maps to non-sector-aligned "
+                f"physical offset 0x{start:X}"
+            )
+            exit(1)
+        with open(args.file, "rb") as fs:
+            fs.seek(args.skip, os.SEEK_SET)
+            payload = beken.add_crc(fs.read(size))
+        input_stream = io.BytesIO(payload)
+        input_size = len(payload)
         print(
-            f"The start offset you specified (0x{args.start:06X}) will overwrite the bootloader area."
+            f"Writing {size} logical bytes at 0x{args.logical_start:X} as "
+            f"{input_size} physical bytes at 0x{start:X}"
+        )
+    else:
+        start = args.start or 0x000000
+        if start < 0:
+            print("Physical start offset cannot be negative")
+            exit(1)
+        input_stream = open(args.file, "rb")
+        input_stream.seek(args.skip, os.SEEK_SET)
+        input_size = size
+        print(f"Writing {input_size} raw bytes to physical offset 0x{start:X}")
+
+    if start < 0x11000 and not args.bootloader:
+        input_stream.close()
+        print(
+            f"The start offset you specified (0x{start:06X}) will overwrite the boot area."
         )
         print(
             "If that's really what you want, pass the additional -B/--bootloader flag."
         )
+        print("Writing this area can render the device unbootable.")
+        exit(1)
+
+    if start + input_size > device.flash_size:
+        input_stream.close()
         print(
-            "This can only be used on BK7231N, otherwise it will probably render the device unusable (and unrecoverable)."
+            f"Writing 0x{input_size:X} bytes at 0x{start:X} would go past "
+            f"the 0x{device.flash_size:X}-byte flash memory end"
         )
-        print("** Passing the -B flag will not check for chip type **")
         exit(1)
 
-    try:
-        size = os.stat(args.file).st_size - args.skip
-    except FileNotFoundError:
-        print("Input file doesn't exist")
-        exit(1)
-
-    if args.length:
-        if args.length > size:
-            print("Length is bigger than entire file size")
-            exit(1)
-        if args.start + args.length > 0x200000:
-            print(
-                f"Writing 0x{args.length:X} bytes at 0x{args.start:X} would go past the flash memory end"
-            )
-            exit(1)
-        size = args.length
-
-    print(f"Writing {size} bytes to 0x{args.start:X}")
-
-    with open(args.file, "rb") as fs:
-        fs.seek(args.skip, os.SEEK_SET)
+    with input_stream as fs:
         for _ in device.program_flash(
             io=fs,
-            io_size=size,
-            start=args.start,
+            io_size=input_size,
+            start=start,
             crc_check=not args.no_verify_checksum,
             dry_run=False,
         ):
             pass
+    if args.reboot:
+        print("Rebooting chip")
+        device.reboot_chip()
 
 
 def parse_args():
     parser = argparse.ArgumentParser(
         prog="bk7231tools",
-        description="Utilities to interact with BK7231 chips over serial and analyze their artifacts",
+        description="Utilities to interact with Beken BK72xx chips over serial and analyze their artifacts",
     )
 
     subparsers = parser.add_subparsers(
@@ -536,7 +631,8 @@ def parse_args():
         "-l",
         "--length",
         type=lambda x: int(x, 0),
-        help="Length to read from flash, in bytes [dec/hex] (default: 0x200000 = 2 MiB)",
+        help="Length to read from flash, in bytes [dec/hex] "
+        "(default: detected flash for BK7258, otherwise 2 MiB)",
     )
     parser_read_flash.add_argument(
         "--no-verify-checksum",
@@ -568,11 +664,17 @@ def parse_args():
     )
     parser_write_flash = __add_serial_args(parser_write_flash)
     parser_write_flash.add_argument("file", help="File to write to flash")
-    parser_write_flash.add_argument(
+    parser_write_start = parser_write_flash.add_mutually_exclusive_group()
+    parser_write_start.add_argument(
         "-s",
         "--start",
         type=lambda x: int(x, 0),
         help="Starting address to write to [dec/hex] (default: 0x000000)",
+    )
+    parser_write_start.add_argument(
+        "--logical-start",
+        type=lambda x: int(x, 0),
+        help="Logical XIP address; add Beken 32+2 CRC blocks before writing",
     )
     parser_write_flash.add_argument(
         "-S",
@@ -599,7 +701,13 @@ def parse_args():
         dest="bootloader",
         action="store_true",
         default=False,
-        help="Allow overwriting bootloader area (not recommended on BK7231T)",
+        help="Allow overwriting the boot area",
+    )
+    parser_write_flash.add_argument(
+        "--reboot",
+        action="store_true",
+        default=False,
+        help="Reboot the chip after a successful write",
     )
     parser_write_flash.set_defaults(handler=write_flash)
     parser_write_flash.set_defaults(device_required=True)
@@ -658,6 +766,9 @@ def cli():
                     args.timeout,
                     args.debug,
                     args.link_read_timeout,
+                    args.chip,
+                    args.reset_mode,
+                    args.reset_hold,
                 )
             ) as device:
                 args.handler(device, args)
@@ -665,6 +776,7 @@ def cli():
             args.handler(args)
     except TimeoutError:
         print(traceback.format_exc(), file=sys.stderr)
+        raise SystemExit(1)
 
 
 if __name__ == "__main__":

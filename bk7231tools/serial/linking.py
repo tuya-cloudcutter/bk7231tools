@@ -79,8 +79,8 @@ class BK7231SerialLinking(BK7231SerialInterface):
 
         if connected and steps_done < len(steps):
             # link established mid-sequence: drop the remaining reset steps
-            # and release both lines so the chip isn't left held in reset
-            self.hw_reset_apply(False, False)
+            # and release only the lines controlled by the selected sequence
+            self.hw_reset_release()
 
         self.drain()
         self.serial.timeout = tm_prev
@@ -97,6 +97,27 @@ class BK7231SerialLinking(BK7231SerialInterface):
         self.command(command, after_send=baudrate_cb)
 
     def detect_chip(self) -> None:
+        if self.chip_type_forced == BkChipType.BK7258:
+            # The BK7258 download ROM implements the FULL command set. The
+            # system register address is documented by Beken's Apache-2.0 SDK.
+            self.protocol_type = BkProtocolType.FULL
+            self.chip_type = BkChipType.BK7258
+            self.bootloader_type = None
+            self.bootloader = None
+            # connect() obtains the physical capacity from the JEDEC ID.
+            self.flash_size = 0
+            self.boot_protection_bypass = False
+            self.bk_chip_id = self.register_read(0x44010004)
+            self.info(
+                f"BK72xx connected - "
+                f"protocol: {self.protocol_type.name}, "
+                f"chip: {self.chip_type.name}, "
+                f"bootloader: None, "
+                f"chip ID: {hex(self.bk_chip_id)}, "
+                f"boot version: {self.bk_boot_version}"
+            )
+            return
+
         # try bootloader CRC matching first
         # all known protocols support this command
         crc = self.read_flash_range_crc(0, 256)

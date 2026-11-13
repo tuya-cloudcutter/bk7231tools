@@ -1,5 +1,6 @@
 # bk7231tools
-This is a collection of tools to interact with and analyze artifacts for BK7231 MCUs.
+This is a collection of tools to interact with and analyze artifacts for BK7231 and
+compatible Beken MCUs.
 
 ## Contributors
 - [Kuba Szczodrzyński - @kuba2k2](https://github.com/kuba2k2)
@@ -25,6 +26,9 @@ There are a couple of usage modes for this toolset:
 - chip identification
 - reading flash
 - writing flash
+
+BK7258 support, including its CRC-packed executable format and RTS-only reset,
+is documented in [docs/bk7258.md](docs/bk7258.md).
 
 ### Flash reading
 
