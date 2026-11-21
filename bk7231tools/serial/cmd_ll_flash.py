@@ -63,7 +63,15 @@ class BK7231SerialCmdLLFlash(BK7231SerialInterface):
             )
 
     def flash_read_id(self, cmd: int = 0x9F) -> dict:
-        self.flash_id = self.flash_id or bytes(self.flash_read_reg24(cmd))
+        if not self.flash_id:
+            flash_id = bytes(self.flash_read_reg24(cmd))
+            if flash_id in (b"\x00\x00\x00", b"\xFF\xFF\xFF"):
+                # the BK7236 (T3) bootloader returns zeros until the flash was read
+                self.flash_read_4k(start=0x11000, crc_check=False)
+                flash_id = bytes(self.flash_read_reg24(cmd))
+            if flash_id in (b"\x00\x00\x00", b"\xFF\xFF\xFF"):
+                raise NotImplementedError(f"Invalid flash ID: {flash_id.hex()}")
+            self.flash_id = flash_id
         self.flash_params = dict(
             id=self.flash_id,
             manufacturer_id=self.flash_id[0],
