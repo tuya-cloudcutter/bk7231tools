@@ -10,6 +10,7 @@ class BkChipType(IntEnum):
     BK7231U = 0x0001  # not checked
     BK7231T = 0x7231A
     BK7231N = 0x7231C
+    BK7236 = 0x7236
     BK7238 = 0x7238
     BK7252 = 0x7252
 
@@ -93,6 +94,12 @@ class BkBootloaderType(Enum):
         chip=BkChipType.BK7231N,
         protocol=BkProtocolType.FULL,
         version="3.0.1",
+    )
+    # bootloader of a Tuya T3-U module (BK7236)
+    BK7236_T3 = BkBootloader(
+        crc=0xF7F7C360,  # 00000000000000000000000000000000
+        chip=BkChipType.BK7236,
+        protocol=BkProtocolType.FULL,
     )
     # bl_t1_2.0.0_DA47.bin
     BK7238_T1_2_0_0 = BkBootloader(
