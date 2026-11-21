@@ -138,8 +138,15 @@ class BK7231SerialLinking(BK7231SerialInterface):
                 # CRC does not match - fail
                 raise ValueError("CRC mismatch while checking chip type!")
 
-        # BK7236 has no SCTRL_CHIP_ID there (system registers at 0x44010000)
-        if self.check_protocol(BkReadRegCmnd) and self.chip_type != BkChipType.BK7236:
+        if self.check_protocol(BkReadRegCmnd) and self.chip_type == BkChipType.BK7236:
+            # read BK7236 SYS_VERSION_ID (0x7236xxxx)
+            self.bk_chip_id = self.register_read(0x44010004)
+            if self.bk_chip_id >> 16 != BkChipType.BK7236:
+                self.warn(
+                    f"Unknown SYS_VERSION_ID - {hex(self.bk_chip_id)}"
+                    f" - please report this on GitHub issues!"
+                )
+        elif self.check_protocol(BkReadRegCmnd):
             # read BK72xx BootROM SCTRL_CHIP_ID
             self.bk_chip_id = self.register_read(0x800000)
             # match the chip by ID
