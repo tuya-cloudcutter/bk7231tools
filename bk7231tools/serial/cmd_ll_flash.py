@@ -85,6 +85,7 @@ class BK7231SerialCmdLLFlash(BK7231SerialInterface):
         self.info("Flash size - detecting...")
         sizes = [2, 4, 8, 16]  # MiB
         # disable bootloader protection bypass
+        boot_protection_bypass = self.boot_protection_bypass
         self.boot_protection_bypass = False
         safe_offset = 0x11000
         try:
@@ -99,7 +100,7 @@ class BK7231SerialCmdLLFlash(BK7231SerialInterface):
                     return size
             raise ValueError("Couldn't detect flash chip size!")
         finally:
-            self.boot_protection_bypass = True
+            self.boot_protection_bypass = boot_protection_bypass
 
     def flash_read_4k(
         self,
