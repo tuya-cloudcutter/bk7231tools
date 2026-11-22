@@ -138,9 +138,10 @@ class BK7231SerialLinking(BK7231SerialInterface):
                 # CRC does not match - fail
                 raise ValueError("CRC mismatch while checking chip type!")
 
+        # the address wraparound is a workaround for BK7231 bootloaders only
+        self.boot_protection_bypass = self.chip_type != BkChipType.BK7236
+
         if self.chip_type == BkChipType.BK7236:
-            # the address wraparound is a workaround for BK7231 bootloaders only
-            self.boot_protection_bypass = False
             if self.check_protocol(BkReadRegCmnd):
                 # read BK7236 SYS_VERSION_ID (0x7236xxxx)
                 self.bk_chip_id = self.register_read(0x44010004)
