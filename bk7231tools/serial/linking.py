@@ -139,33 +139,34 @@ class BK7231SerialLinking(BK7231SerialInterface):
                 raise ValueError("CRC mismatch while checking chip type!")
 
         self.bk_chip_id = None
-        if self.check_protocol(BkReadRegCmnd) and self.chip_type != BkChipType.BK7236:
-            # read BK72xx BootROM SCTRL_CHIP_ID
-            self.bk_chip_id = self.register_read(0x800000)
-            # match the chip by ID
-            if any(c.value == self.bk_chip_id for c in BkChipType):
-                self.chip_type = BkChipType(self.bk_chip_id)
-            elif self.bk_chip_id != 0:
-                self.warn(
-                    f"Unknown SCTRL_CHIP_ID - {hex(self.bk_chip_id)}"
-                    f" - please report this on GitHub issues!"
-                )
-
-        if (
-            self.check_protocol(BkReadRegCmnd)
-            and self.chip_type in (None, BkChipType.BK7236)
-            and not self.bk_chip_id
-        ):
-            # BK7236 has no SCTRL_CHIP_ID: read SYS_VERSION_ID (0x7236xxxx)
-            self.bk_chip_id = self.register_read(0x44010004)
-            if self.bk_chip_id >> 16 == BkChipType.BK7236:
-                self.chip_type = BkChipType.BK7236
-            else:
-                self.warn(
-                    f"Unknown SCTRL_CHIP_ID - 0x0,"
-                    f" SYS_VERSION_ID - {hex(self.bk_chip_id)}"
-                    f" - please report this on GitHub issues!"
-                )
+        if self.check_protocol(BkReadRegCmnd):
+            if self.chip_type != BkChipType.BK7236:
+                # read BK72xx BootROM SCTRL_CHIP_ID
+                self.bk_chip_id = self.register_read(0x800000)
+                # match the chip by ID
+                if any(c.value == self.bk_chip_id for c in BkChipType):
+                    self.chip_type = BkChipType(self.bk_chip_id)
+                elif self.bk_chip_id != 0 or self.chip_type is not None:
+                    self.warn(
+                        f"Unknown SCTRL_CHIP_ID - {hex(self.bk_chip_id)}"
+                        f" - please report this on GitHub issues!"
+                    )
+            if self.chip_type in (None, BkChipType.BK7236) and not self.bk_chip_id:
+                # BK7236 has no SCTRL_CHIP_ID: read SYS_VERSION_ID (0x7236xxxx)
+                try:
+                    self.bk_chip_id = self.register_read(0x44010004)
+                except (ValueError, TimeoutError):
+                    self.bk_chip_id = None
+                if self.bk_chip_id and self.bk_chip_id >> 16 == BkChipType.BK7236:
+                    self.chip_type = BkChipType.BK7236
+                else:
+                    sys_version = "no response"
+                    if self.bk_chip_id is not None:
+                        sys_version = hex(self.bk_chip_id)
+                    self.warn(
+                        f"Unknown SYS_VERSION_ID - {sys_version}"
+                        f" - please report this on GitHub issues!"
+                    )
 
         # the address wraparound is a workaround for BK7231 bootloaders only
         self.boot_protection_bypass = self.chip_type != BkChipType.BK7236
